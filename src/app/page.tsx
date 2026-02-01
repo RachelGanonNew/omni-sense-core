@@ -34,7 +34,7 @@ export default function Home() {
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [showGlassesModal, setShowGlassesModal] = useState(false);
-  const [bridgeKind, setBridgeKind] = useState<"simulated">("simulated");
+  const [bridgeKind, setBridgeKind] = useState<"simulated" | "vendorX">("simulated");
   const [sensorSample, setSensorSample] = useState<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const sensorRef = useRef<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -478,9 +478,10 @@ export default function Home() {
                 <select
                   className="mt-1 w-full rounded border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
                   value={bridgeKind}
-                  onChange={(e) => setBridgeKind("simulated")}
+                  onChange={(e) => setBridgeKind(e.target.value as any)}
                 >
                   <option value="simulated">Simulated</option>
+                  <option value="vendorX">Vendor X (placeholder)</option>
                 </select>
               </label>
               <div className="mt-4 flex items-center justify-end gap-3">
