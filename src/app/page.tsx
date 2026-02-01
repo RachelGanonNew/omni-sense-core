@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createBridge } from "../lib/glassesBridge";
+import type { GlassesBridge, SensorSample } from "../lib/glassesBridge";
 
 type Levels = {
   rms: number;
@@ -30,6 +32,8 @@ export default function Home() {
   const [outputMode, setOutputMode] = useState<"text" | "voice">("text");
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
+  const [glassesConnected, setGlassesConnected] = useState(false);
+  const sensorRef = useRef<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -39,6 +43,7 @@ export default function Home() {
   const lastSpeakingRef = useRef<boolean>(false);
   const lastRmsRef = useRef<number>(0);
   const startedAtRef = useRef<number | null>(null);
+  const bridgeRef = useRef<GlassesBridge | null>(null);
 
   const speakingThreshold = 0.06; // heuristic
   const spikeFactor = 2.2; // interruption heuristic
@@ -51,6 +56,22 @@ export default function Home() {
     if (audioCtxRef.current) audioCtxRef.current.close();
     audioCtxRef.current = null;
   }, []);
+
+  // Glasses bridge hookup (simulated for now)
+  useEffect(() => {
+    if (glassesConnected) {
+      if (!bridgeRef.current) bridgeRef.current = createBridge("simulated");
+      bridgeRef.current.start((s: SensorSample) => {
+        sensorRef.current = s;
+      });
+    } else {
+      bridgeRef.current?.stop();
+      sensorRef.current = null;
+    }
+    return () => {
+      bridgeRef.current?.stop();
+    };
+  }, [glassesConnected]);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -107,7 +128,7 @@ export default function Home() {
             speaking: levels.speaking,
             interruption: !!interruption,
           },
-          visionHints: { scene: "meeting" },
+          visionHints: { scene: "meeting", sensors: sensorRef.current || undefined },
           transcript: notes.slice(0, 220),
         };
 
@@ -150,6 +171,7 @@ export default function Home() {
               intensityPct: payload.audioDynamics.intensityPct,
               speaking: payload.audioDynamics.speaking,
               interruption: payload.audioDynamics.interruption,
+              sensors: sensorRef.current || undefined,
             }),
           });
           if (!res.ok) return;
@@ -398,6 +420,13 @@ export default function Home() {
             <input type="checkbox" checked={useStream} onChange={(e) => setUseStream(e.target.checked)} />
             Stream Mode
           </label>
+          <button
+            className={`rounded-md border px-3 py-1.5 text-sm ${glassesConnected ? "bg-emerald-600 text-white" : ""}`}
+            onClick={() => setGlassesConnected((v) => !v)}
+            title="Connect AI Glasses (simulated)"
+          >
+            {glassesConnected ? "Glasses: Connected" : "Connect Glasses"}
+          </button>
           <button
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
             onClick={() => setTrainerOpen((v) => !v)}
