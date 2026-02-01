@@ -37,6 +37,10 @@ export default function Home() {
   const [bridgeKind, setBridgeKind] = useState<"simulated" | "vendorX">("simulated");
   const [sensorSample, setSensorSample] = useState<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
   const sensorRef = useRef<{ headMotion?: string; brightness?: number; temp?: number } | null>(null);
+  const lastSensorTsRef = useRef<number>(0);
+  const backoffRef = useRef<number>(500);
+  const engageBufRef = useRef<string[]>([]);
+  const [engagement, setEngagement] = useState<string>("-");
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -67,14 +71,61 @@ export default function Home() {
       bridgeRef.current.start((s: SensorSample) => {
         sensorRef.current = s;
         setSensorSample(s);
+        lastSensorTsRef.current = Date.now();
+        const hm = (s?.headMotion || "steady").toString();
+        engageBufRef.current.push(hm);
+        if (engageBufRef.current.length > 8) engageBufRef.current.shift();
+        const counts = engageBufRef.current.reduce((acc: Record<string, number>, k: string) => {
+          acc[k] = (acc[k] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        let cue = "neutral";
+        const nod = counts["nod"] || 0;
+        const shake = counts["shake"] || 0;
+        const steady = counts["steady"] || 0;
+        if (nod >= 3 && nod > shake) cue = "agreeing";
+        else if (shake >= 3 && shake > nod) cue = "disagreeing?";
+        else if (steady >= 5) cue = "engaged";
+        setEngagement(cue);
       });
     } else {
       bridgeRef.current?.stop();
       sensorRef.current = null;
       setSensorSample(null);
+      lastSensorTsRef.current = 0;
+      engageBufRef.current = [];
+      setEngagement("-");
     }
     return () => {
       bridgeRef.current?.stop();
+    };
+  }, [glassesConnected, bridgeKind]);
+
+  // Heartbeat reconnect/backoff for glasses sensors
+  useEffect(() => {
+    if (!glassesConnected) return;
+    let cancelled = false;
+    const iv = setInterval(() => {
+      if (cancelled) return;
+      const now = Date.now();
+      if (lastSensorTsRef.current && now - lastSensorTsRef.current > 3000) {
+        try { bridgeRef.current?.stop(); } catch {}
+        try {
+          bridgeRef.current = createBridge(bridgeKind);
+          bridgeRef.current.start((s: SensorSample) => {
+            sensorRef.current = s;
+            setSensorSample(s);
+            lastSensorTsRef.current = Date.now();
+          });
+          backoffRef.current = Math.max(500, Math.min(4000, backoffRef.current + 500));
+        } catch {}
+      } else if (lastSensorTsRef.current) {
+        backoffRef.current = Math.max(500, backoffRef.current - 200);
+      }
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
     };
   }, [glassesConnected, bridgeKind]);
 
@@ -133,7 +184,7 @@ export default function Home() {
             speaking: levels.speaking,
             interruption: !!interruption,
           },
-          visionHints: { scene: "meeting", sensors: sensorRef.current || undefined },
+          visionHints: { scene: "meeting", sensors: sensorRef.current ? { ...sensorRef.current, engagement } : undefined },
           transcript: notes.slice(0, 220),
         };
 
@@ -176,7 +227,7 @@ export default function Home() {
               intensityPct: payload.audioDynamics.intensityPct,
               speaking: payload.audioDynamics.speaking,
               interruption: payload.audioDynamics.interruption,
-              sensors: sensorRef.current || undefined,
+              sensors: sensorRef.current ? { ...sensorRef.current, engagement } : undefined,
             }),
           });
           if (!res.ok) return;
@@ -528,7 +579,7 @@ export default function Home() {
           </div>
           {glassesConnected && sensorSample && (
             <div className="text-xs text-zinc-500">
-              Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"}
+              Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"} • engagement {engagement}
             </div>
           )}
 
