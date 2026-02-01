@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OmniSense Core
 
-## Getting Started
+Proactive, privacy-first multimodal "Cognitive Second Brain" for meetings and safety, built for the Gemini 3 Hackathon.
 
-First, run the development server:
+## Setup
+- Requirements: Node 18+, a Google Gemini API key.
+- Create `.env.local` in project root:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-3.0-pro
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Run
+- Dev: `npm run dev` → http://localhost:3000
+- Prod build: `npm run build`
+- Prod serve: `npm run start` → http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Key Screens
+- Home: live mic/cam assist, speaking intensity, interruption nudge, suggestions, Trainer panel.
+- Upload: extract frames from a video and get a structured JSON insight with Confidence.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Endpoints
+- POST `/api/omnisense/analyze` — live JSON insight with confidence.
+- POST `/api/omnisense/analyze-frames` — frames + transcript → JSON insight with confidence.
+- GET  `/api/omnisense/analyze/stream` — streaming demo of insight.
+- GET/POST `/api/omnisense/context` — system instruction, preferences, history.
+- POST `/api/extract-actions` — summarize notes to action items.
+- POST `/api/suggest` — lightweight suggestions from audio dynamics.
+- GET  `/api/evaluate` — synthetic scenarios for prompt QA.
+- GET  `/api/local-video` — dev-only stream for `C:/Users/USER/Downloads/a.mp4`.
+- GET  `/api/health` — liveness check.
 
-## Learn More
+## Evaluation & Prompt QA
+- Open `/api/evaluate` to run synthetic cases and get average confidence.
+- Tune Trainer system instruction/preferences and re-run to iterate.
 
-To learn more about Next.js, take a look at the following resources:
+## Privacy
+- No raw audio/video persisted. Only brief context and settings stored in `.data/omni.json` for local use.
+- Prompts instruct Gemini to avoid sensitive attribute inference or identity claims.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Security
+- Basic per-IP rate limiting on analysis routes.
+- Schema coercion for outputs; Gemini self-check for confidence.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Submission Checklist (Devpost)
+- Public demo URL or interactive app: deploy to Vercel/Netlify and include link.
+- ~3-minute demo video showcasing Upload, Trainer, and Live features.
+- 200-word Gemini usage write-up: see `SUBMISSION.md`.
+- Public code repository: this repo.
+- License: MIT (see `LICENSE`).
 
-## Deploy on Vercel
+## Deploy
+- Vercel (recommended):
+  - Create a new project from this repo.
+  - Set Environment Variables: `GEMINI_API_KEY`, `GEMINI_MODEL`.
+  - Deploy. Open the public URL and verify `/api/health`.
+- Netlify:
+  - Use included `netlify.toml` and Next.js plugin.
+  - Set env vars as above.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Judges’ Quick Path
+1) Visit `/upload`, click "Load default", then Analyze → see insight + Confidence.
+2) Paste notes in Home → Extract Actions.
+3) Open Trainer, tweak system instruction → re-run `/api/evaluate`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For a detailed overview and demo script, see `SUBMISSION.md`.
