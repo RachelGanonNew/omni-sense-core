@@ -85,7 +85,18 @@ Instructions:
       contents.push({ role: "user", parts: [{ text: `Transcript snippet: ${transcript.slice(0, 1000)}` }] });
     }
 
-    const resp = await model.generateContent({ contents });
+    // Simple retry/backoff for transient failures
+    const genOnce = async () => await model.generateContent({ contents });
+    let resp: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        resp = await genOnce();
+        break;
+      } catch (e) {
+        if (attempt === 2) throw e;
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
     let text = resp.response.text().trim();
     const s = text.indexOf("{");
     const e = text.lastIndexOf("}");

@@ -81,7 +81,18 @@ Instructions:
       return NextResponse.json(local);
     }
 
-    const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+    // Simple retry/backoff for transient failures
+    const genOnce = async () => await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+    let resp: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        resp = await genOnce();
+        break;
+      } catch (e) {
+        if (attempt === 2) throw e;
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
     let text = resp.response.text().trim();
 
     // Try to extract JSON

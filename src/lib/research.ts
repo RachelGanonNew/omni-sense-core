@@ -13,6 +13,8 @@ export interface ResearchProvider {
   enrichPerson(name: string): Promise<ResearchResult>;
 }
 
+import { fetchWithRetry } from "./net";
+
 async function googleSearch(name: string): Promise<ResearchResult | null> {
   const key = process.env.GOOGLE_API_KEY;
   const cx = process.env.GOOGLE_CSE_ID;
@@ -22,7 +24,7 @@ async function googleSearch(name: string): Promise<ResearchResult | null> {
   url.searchParams.set("num", "3");
   url.searchParams.set("key", key);
   url.searchParams.set("cx", cx);
-  const res = await fetch(url.toString());
+  const res = await fetchWithRetry(url.toString(), {}, { retries: 2, backoffMs: 600, timeoutMs: 6000 });
   if (!res.ok) return null;
   const j: any = await res.json();
   const items: any[] = Array.isArray(j.items) ? j.items.slice(0, 3) : [];
@@ -34,7 +36,7 @@ async function googleSearch(name: string): Promise<ResearchResult | null> {
 
 async function wikipediaSummary(name: string): Promise<ResearchResult | null> {
   const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const res = await fetchWithRetry(url, { headers: { accept: "application/json" } }, { retries: 2, backoffMs: 600, timeoutMs: 6000 });
   if (!res.ok) return null;
   const j = await res.json();
   return {
