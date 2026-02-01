@@ -3,9 +3,9 @@ export async function fetchWithRetry(
   init: RequestInit = {},
   opts: { retries?: number; backoffMs?: number; timeoutMs?: number } = {}
 ): Promise<Response> {
-  const retries = opts.retries ?? 2;
-  const backoffMs = opts.backoffMs ?? 500;
-  const timeoutMs = opts.timeoutMs ?? 6000;
+  const retries = opts.retries ?? 4;
+  const backoffMs = opts.backoffMs ?? 800;
+  const timeoutMs = opts.timeoutMs ?? 12000;
 
   let lastErr: any = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
