@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOmniContext } from "@/lib/omnisenseStore";
+import { createResearchProvider } from "@/lib/research";
 
-// Simple public-web enrichment using Wikipedia summary API
+// Public-web enrichment using a pluggable provider
 // GET /api/research?name=Elon%20Musk
 export async function GET(req: NextRequest) {
   try {
@@ -16,18 +17,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ source: "local", summary: `Local mode: cannot fetch web for ${name}.` });
     }
 
-    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`;
-    const res = await fetch(url, { headers: { "accept": "application/json" } });
-    if (!res.ok) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    const j = await res.json();
-    const out = {
-      title: j.title,
-      description: j.description,
-      extract: j.extract,
-      url: j.content_urls?.desktop?.page || j.content_urls?.mobile?.page,
-      source: "wikipedia",
-    };
-    return NextResponse.json(out);
+    const provider = createResearchProvider();
+    const result = await provider.enrichPerson(name);
+    if (!result || result.source === "none") return NextResponse.json({ error: "not_found" }, { status: 404 });
+    return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
