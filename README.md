@@ -98,3 +98,49 @@ For a detailed overview and demo script, see `SUBMISSION.md`.
   - Ensure outbound HTTPS (443) to Google APIs is allowed (VPN/Firewall can block).
   - Retries/backoff/timeout are built in; transient errors usually resolve on retry.
   - If a corporate network blocks requests, try a hotspot or whitelist the app.
+
+## Judge Guide: Why This Wins the Action Era
+
+- **Orchestrator, not a prompt wrapper**
+  - Server-side agent with structured tool calling, long-context assembly, verification artifacts, and audit timeline.
+  - Multi-step runs with goals, tool execution, and self-checks.
+
+- **Temporal reasoning and real-time coaching**
+  - Client detectors (dominance, overlap, engagement drop) trigger agent actions and on-the-spot coaching.
+  - Cooldowns, privacy controls, and voice output via Live/TTS.
+
+- **Long-context continuity**
+  - Session + logs + tasks merged into a compact long-context injected into prompts.
+  - Rolling artifacts: tasks.json, notes.md, verify/*.jsonl, audit_*.html.
+
+- **Verification and auditability**
+  - Endpoints: /api/audit/timeline and /api/audit/report.
+  - HTML audit report with PASS/FAIL entries, recent logs, and session summary.
+
+## Quick Demo Script (5–7 minutes)
+
+1. Start the app and enable AI Assist (mic/cam allowed).
+2. Turn on Conversational Voice and set Privacy to Cloud.
+3. Trigger detections:
+   - Dominance: speak for ~10s; hear a concise coaching cue.
+   - Overlap: create a quick loud spike; see detection + coaching.
+4. Autonomous Run:
+   - In the Autonomous Run panel, set goal: "Prepare follow-up plan and assign owners"; click Run.
+   - After it completes, open Verification/Audit and Export HTML Report.
+5. Show artifacts in `.data/verify/` and timeline counts in the panel.
+6. (Optional) Use Extract Actions with a short note; show generated actions and calendar link.
+
+## Criteria Mapping
+
+- Action Era Orchestrator: tools registry, multi-step loops, verification artifacts.
+- Long Context: assembled context injected every step with rolling summaries.
+- Temporal Understanding: detectors feed actions + coaching.
+- Verification/Audit: JSONL + HTML report; PASS/FAIL and artifacts.
+- Privacy & Safety: modes (off/local/cloud), cooldowns, and no sensitive inferences.
+
+## Deployment Notes
+
+- Environment: set GEMINI_API_KEY (required), optionally GOOGLE_API_KEY and GOOGLE_CSE_ID.
+- Build: `npm run build` then `npm run start`.
+- Public demo: local-only features work without keys; full features require Cloud privacy mode and keys.
+
