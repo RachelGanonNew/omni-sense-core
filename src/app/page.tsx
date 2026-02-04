@@ -324,256 +324,308 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
       {!consented && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
-            <h2 className="mb-2 text-2xl font-semibold">Enable AI Assist</h2>
-            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">
-              Camera and microphone will be used in real time. No raw media is stored. You can pause at any time.
-            </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl dark:bg-slate-900">
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 p-0.5">
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-slate-900">
+                  <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </div>
+              </div>
+              <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Enable AI Assistant</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Camera and microphone will be used in real time. No raw media is stored. You can pause at any time.
+              </p>
+            </div>
             <div className="flex gap-3">
               <button
-                className="rounded-md bg-black px-4 py-2 text-white dark:bg-white dark:text-black"
+                className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-3 font-medium text-white shadow-lg transition-all hover:shadow-xl"
                 onClick={async () => {
                   setConsented(true);
                   await start();
                 }}
               >
-                Enable
+                Enable Assistant
               </button>
               <button
-                className="rounded-md border border-zinc-300 px-4 py-2 dark:border-zinc-700"
+                className="flex-1 rounded-xl border border-gray-300 px-4 py-3 font-medium text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                 onClick={() => setConsented(false)}
               >
-                Not now
+                Not Now
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className={`h-3 w-3 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-zinc-400"}`} />
-          <span className="text-sm">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            Output
-            <select
-              className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
-              value={outputMode}
-              onChange={async (e) => {
-                const v = e.target.value as "text" | "voice";
-                setOutputMode(v);
-                try {
-                  await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) });
-                } catch {}
+      {/* Header */}
+      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-700 dark:bg-slate-900/80">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className={`h-3 w-3 rounded-full ${consented && !paused ? "bg-green-500 shadow-lg shadow-green-500/50" : "bg-gray-400"}`} />
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                AI Assistant {consented && !paused ? "Active" : "Inactive"}
+              </span>
+            </div>
+            {consented && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <span>Speaking: {speakingSeconds}s</span>
+                <span>•</span>
+                <span>Intensity: {intensityPct}%</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              onClick={() => setTrainerOpen((v) => !v)}
+            >
+              {trainerOpen ? "Close Settings" : "Settings"}
+            </button>
+            <button
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                paused 
+                  ? "bg-green-500 text-white hover:bg-green-600" 
+                  : "bg-red-500 text-white hover:bg-red-600"
+              }`}
+              onClick={() => {
+                if (!consented) return;
+                setPaused((p) => {
+                  const np = !p;
+                  if (np) {
+                    stopAudio();
+                    stopStream();
+                  } else {
+                    start();
+                  }
+                  return np;
+                });
               }}
             >
-              <option value="text">Text</option>
-              <option value="voice">Voice</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            Privacy
-            <select
-              className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
-              value={privacyMode}
-              onChange={async (e) => {
-                const v = e.target.value as "off" | "local" | "cloud";
-                setPrivacyMode(v);
-                try {
-                  await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) });
-                } catch {}
-              }}
-            >
-              <option value="cloud">Cloud</option>
-              <option value="local">Local</option>
-              <option value="off">Off</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            <input type="checkbox" checked={useStream} onChange={(e) => setUseStream(e.target.checked)} />
-            Stream Mode
-          </label>
-          <button
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
-            onClick={() => setTrainerOpen((v) => !v)}
-          >
-            {trainerOpen ? "Close Trainer" : "Open Trainer"}
-          </button>
-          <button
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
-            onClick={() => {
-              if (!consented) return;
-              setPaused((p) => {
-                const np = !p;
-                if (np) {
-                  stopAudio();
-                  stopStream();
-                } else {
-                  start();
-                }
-                return np;
-              });
-            }}
-          >
-            {paused ? "Resume" : "Pause"}
-          </button>
+              {paused ? "Resume" : "Pause"}
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-2">
-        <section className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <video ref={videoRef} className="h-[280px] w-full rounded-lg bg-black object-cover" muted playsInline />
-          <div className="mt-4">
-            <div className="mb-2 text-sm font-medium">Speaking intensity</div>
-            <div className="h-3 w-full rounded-full bg-zinc-200 dark:bg-zinc-800">
-              <div
-                className="h-3 rounded-full bg-emerald-500 transition-[width] duration-75"
-                style={{ width: `${intensityPct}%` }}
+      {/* Main Content */}
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          
+          {/* Video Section */}
+          <div className="lg:col-span-2">
+            <div className="rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-900">
+              <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Live Video Feed</h2>
+              <video 
+                ref={videoRef} 
+                className="h-96 w-full rounded-xl bg-black object-cover shadow-inner" 
+                muted 
+                playsInline 
               />
+              
+              {/* Audio Visualization */}
+              <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Speaking Intensity</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{intensityPct}%</span>
+                </div>
+                <div className="h-4 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-300 ease-out"
+                    style={{ width: `${intensityPct}%` }}
+                  />
+                </div>
+                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  You've been speaking for {speakingSeconds} seconds
+                </div>
+              </div>
+
+              {/* Interruption Alert */}
+              {interruption && (
+                <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <span className="font-medium text-amber-800 dark:text-amber-200">{interruption}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">You spoke ~{speakingSeconds}s</div>
           </div>
-        </section>
 
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="text-lg font-semibold">Live Suggestions</h3>
-          {interruption && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-              {interruption}
+          {/* Suggestions Section */}
+          <div className="lg:col-span-1">
+            <div className="rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-900">
+              <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">AI Suggestions</h2>
+              
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-slate-800">
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                    {suggestion}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                Suggestions update in real-time based on conversation dynamics
+              </div>
             </div>
-          )}
-          <div className="rounded-md border border-zinc-200 p-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
-            {suggestion}
           </div>
+        </div>
 
-          <div className="mt-2 text-xs text-zinc-500">Suggestions update as audio dynamics change.</div>
-        </section>
-
-        <section className="md:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-2 text-lg font-semibold">Commitments → Action Cards</h3>
+        {/* Notes and Actions Section */}
+        <div className="mt-8 rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-900">
+          <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Meeting Notes & Actions</h2>
+          
           <textarea
-            className="w-full min-h-28 rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
-            placeholder="Paste brief meeting notes (or type key commitments)..."
+            className="w-full min-h-32 rounded-xl border border-gray-300 bg-gray-50 p-4 text-sm outline-none focus:border-blue-500 focus:bg-white dark:border-gray-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:bg-slate-700"
+            placeholder="Paste brief meeting notes or type key commitments..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-          <div className="mt-3 flex items-center gap-3">
+          
+          <div className="mt-4 flex items-center gap-4">
             <button
-              className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
+              className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-60"
               onClick={extractActions}
               disabled={!notes.trim() || extracting}
             >
               {extracting ? "Extracting..." : "Extract Actions"}
             </button>
-            {summary && <span className="text-xs text-zinc-500">Summary ready</span>}
+            {summary && (
+              <span className="text-sm text-green-600 dark:text-green-400">
+                ✓ Summary ready
+              </span>
+            )}
           </div>
 
+          {/* Summary */}
           {summary && (
-            <div className="mt-4 rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800">
-              <div className="mb-1 font-medium">Summary</div>
-              <div className="text-zinc-700 dark:text-zinc-300">{summary}</div>
+            <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-slate-800">
+              <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">Summary</h3>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{summary}</p>
             </div>
           )}
 
+          {/* Actions */}
           {actions.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <div className="font-medium">Actions</div>
+            <div className="mt-6 space-y-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Action Items</h3>
               {actions.map((a, i) => (
-                <div key={i} className="flex items-center justify-between rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800">
-                  <div>
-                    <div className="font-medium">{a.title}</div>
-                    <div className="text-xs text-zinc-500">
-                      {a.type}
-                      {a.owner ? ` • ${a.owner}` : ""}
-                      {a.due ? ` • due ${a.due}` : ""}
+                <div key={i} className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white">{a.title}</h4>
+                      <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {a.type}
+                        {a.owner && ` • ${a.owner}`}
+                        {a.due && ` • Due ${a.due}`}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {a.type === "calendar" && (
-                      <a
-                        className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        href={calendarDraftUrl(a.title, a.date, a.time)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Calendar Draft
-                      </a>
-                    )}
-                    {a.type === "task" && (
-                      <button
-                        className="rounded-md border px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        onClick={() => alert("Task added locally for demo")}
-                      >
-                        Add Task
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {a.type === "calendar" && (
+                        <a
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                          href={calendarDraftUrl(a.title, a.date, a.time)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Add to Calendar
+                        </a>
+                      )}
+                      {a.type === "task" && (
+                        <button
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                          onClick={() => alert("Task added locally for demo")}
+                        >
+                          Add Task
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </div>
 
+        {/* Settings Panel */}
         {trainerOpen && (
-          <section className="md:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="mb-2 text-lg font-semibold">OmniSense Trainer</h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="mt-8 rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-900">
+            <h2 className="mb-6 text-xl font-bold text-gray-900 dark:text-white">OmniSense Settings</h2>
+            
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
-                <div className="mb-1 text-sm font-medium">System Instruction</div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  System Instruction
+                </label>
                 <textarea
-                  className="h-48 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
+                  className="h-48 w-full rounded-xl border border-gray-300 bg-gray-50 p-4 text-sm outline-none focus:border-blue-500 focus:bg-white dark:border-gray-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:bg-slate-700"
                   value={sysInstr}
                   onChange={(e) => setSysInstr(e.target.value)}
                 />
               </div>
+              
               <div>
-                <div className="mb-1 text-sm font-medium">Preferences (JSON)</div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Preferences (JSON)
+                </label>
                 <textarea
-                  className="h-48 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm font-mono outline-none focus:border-zinc-500 dark:border-zinc-700"
+                  className="h-48 w-full rounded-xl border border-gray-300 bg-gray-50 p-4 text-sm font-mono outline-none focus:border-blue-500 focus:bg-white dark:border-gray-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:bg-slate-700"
                   value={prefs}
                   onChange={(e) => setPrefs(e.target.value)}
                 />
               </div>
             </div>
-            <div className="mt-4">
-              <div className="mb-1 text-sm font-medium">History Snippet</div>
+            
+            <div className="mt-6">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                History Snippet
+              </label>
               <textarea
-                className="h-20 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
+                className="h-20 w-full rounded-xl border border-gray-300 bg-gray-50 p-4 text-sm outline-none focus:border-blue-500 focus:bg-white dark:border-gray-600 dark:bg-slate-800 dark:focus:border-blue-400 dark:focus:bg-slate-700"
                 value={hist}
                 onChange={(e) => setHist(e.target.value)}
               />
             </div>
-            <div className="mt-3 flex items-center gap-3">
+            
+            <div className="mt-6 flex items-center gap-4">
               <button
-                className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
+                className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-60"
                 onClick={saveContext}
                 disabled={savingCtx}
               >
-                {savingCtx ? "Saving..." : "Save Context"}
+                {savingCtx ? "Saving..." : "Save Settings"}
               </button>
               <button
-                className="rounded-md border px-3 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="rounded-xl border border-gray-300 px-6 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                 onClick={testAnalyze}
               >
-                Test Analyze
+                Test Analysis
               </button>
             </div>
+            
             {analyzeOut && (
-              <>
-              <div className="mt-4 mb-1 text-xs text-zinc-600 dark:text-zinc-300">
-                {analyzeConfidence != null ? `Confidence: ${(analyzeConfidence * 100).toFixed(0)}%` : ""}
+              <div className="mt-6">
+                {analyzeConfidence != null && (
+                  <div className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                    Confidence: {(analyzeConfidence * 100).toFixed(0)}%
+                  </div>
+                )}
+                <pre className="max-h-64 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs dark:border-gray-700 dark:bg-slate-800">
+                  {analyzeOut}
+                </pre>
               </div>
-              <pre className="max-h-64 overflow-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950">
-{analyzeOut}
-              </pre>
-              </>
             )}
-          </section>
+          </div>
         )}
       </main>
     </div>
