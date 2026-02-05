@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 function getIceServers() {
@@ -61,11 +61,7 @@ export default function PairPage() {
     setStatus("Starting desktop peer...");
     const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
-    pc.addEventListener("icecandidate", (e) => {
-      if (e.candidate && e.candidate.type) {
-        setIceInfo((s) => s || (e.candidate.type === "relay" ? "relayed" : "non-relay"));
-      }
-    });
+    pc.addEventListener("icecandidate", (e) => { const candStr = (e as any)?.candidate?.candidate as string | undefined; if (candStr) setIceInfo((s) => s || (candStr.includes(" typ relay") ? "relayed" : "non-relay")); });
     pc.addEventListener("track", (ev) => {
       const stream = ev.streams?.[0] || new MediaStream([ev.track]);
       if (remoteVideoRef.current) {
@@ -102,11 +98,7 @@ export default function PairPage() {
     setStatus("Starting phone peer...");
     const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
-    pc.addEventListener("icecandidate", (e) => {
-      if (e.candidate && e.candidate.type) {
-        setIceInfo((s) => s || (e.candidate.type === "relay" ? "relayed" : "non-relay"));
-      }
-    });
+    pc.addEventListener("icecandidate", (e) => { const candStr = (e as any)?.candidate?.candidate as string | undefined; if (candStr) setIceInfo((s) => s || (candStr.includes(" typ relay") ? "relayed" : "non-relay")); });
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = stream;
