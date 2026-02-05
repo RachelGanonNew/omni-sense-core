@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOmniContext } from "./omnisenseStore";
 import { agentAddEvent, agentGet } from "./agentStore";
 import { toolsSchemaSummary, executeTool, ToolCall } from "./tools";
+import { evaluatePolicies } from "./brain";
 import { logJsonl } from "./log";
 import { assembleLongContext } from "./context";
 
@@ -96,6 +97,12 @@ LongContext: ${longCtx}
       await executeTool({ name: "agent.verify_step", args: { claim: "Level 3 escalation executed (no successful tools)", evidence: signature, pass: false } });
     } catch {}
   }
+
+  // Evaluate dynamic policies after tool execution (policy engine is tool-agnostic)
+  try {
+    const privacy = String((prefs as any)?.privacyMode || "cloud");
+    await evaluatePolicies({ observation: input.observation || {}, privacy });
+  } catch {}
 
   const out: AgentStepOutput = {
     thoughts: String(parsed.thoughts || ""),
