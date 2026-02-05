@@ -56,6 +56,10 @@ export default function Home() {
   const [auditFilter, setAuditFilter] = useState<"all" | "pass" | "fail">("all");
   const [artifacts, setArtifacts] = useState<{ name: string; path: string }[]>([]);
   const coachLastRef = useRef<number>(0);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [demoMode, setDemoMode] = useState<boolean>(false);
+  const suggestionBeforeDemoRef = useRef<string>("");
+  const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
   const [showDetectionsSidebar, setShowDetectionsSidebar] = useState<boolean>(true);
   const [showAuditLink, setShowAuditLink] = useState<boolean>(true);
@@ -167,6 +171,44 @@ export default function Home() {
     stopStream();
   }, [stopAudio, stopStream]);
 
+  // Demo Mode: scripted showcase without requiring camera/mic
+  useEffect(() => {
+    if (demoMode) {
+      suggestionBeforeDemoRef.current = suggestion;
+      // Stop capture and polling in demo
+      try { teardown(); } catch {}
+      setConsented(false);
+      setPaused(false);
+
+      const demoTips = [
+        "The Vibe: Friendly but a bit sarcastic.\nThe Hidden Meaning: They’re teasing, not literally criticizing.\nThe Social Script: What to say: ‘Haha fair—what would you do instead?’",
+        "The Vibe: Tense and dismissive.\nThe Hidden Meaning: They may be signaling impatience.\nThe Social Script: What to say: ‘Got it—what’s the one thing you need from me right now?’",
+        "The Vibe: Polite but condescending.\nThe Hidden Meaning: They’re testing boundaries.\nThe Social Script: What to say: ‘I want to help—please tell me what you’re expecting.’",
+      ];
+
+      const now = Date.now();
+      setDetections([
+        { t: now, kind: "Sarcasm likely", info: "Words and tone don’t match" },
+        { t: now - 7000, kind: "Pressure", info: "Short replies, impatient tone" },
+        { t: now - 14000, kind: "Condescending", info: "Overly polite wording" },
+      ]);
+
+      let i = 0;
+      setSuggestion(demoTips[i]);
+      if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
+      demoIntervalRef.current = window.setInterval(() => {
+        i = (i + 1) % demoTips.length;
+        setSuggestion(demoTips[i]);
+      }, 6000);
+      return;
+    }
+
+    if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
+    demoIntervalRef.current = null;
+    setDetections([]);
+    if (suggestionBeforeDemoRef.current) setSuggestion(suggestionBeforeDemoRef.current);
+  }, [demoMode, teardown]);
+
   const tick = useCallback(() => {
     if (!analyserRef.current || !dataRef.current) return;
     // Use permissive casts to avoid TS lib.dom generics mismatch across versions
@@ -202,7 +244,7 @@ export default function Home() {
 
   // Poll or stream backend for concise suggestion (~1/sec)
   useEffect(() => {
-    if (!consented || paused) return;
+    if (!consented || paused || demoMode) return;
     let cancelled = false;
     const iv = setInterval(async () => {
       try {
@@ -284,7 +326,8 @@ export default function Home() {
           await emit("engagement_drop", `Low engagement ${disengaged}/8s`);
         }
 
-        if (useStream) {
+        // Stream mode is always ON in this build
+        if (true) {
           const res = await fetch("/api/omnisense/analyze/stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -315,25 +358,6 @@ export default function Home() {
               }
             }
           }
-        } else {
-          const res = await fetch("/api/suggest", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              intensityPct: payload.audioDynamics.intensityPct,
-              speaking: payload.audioDynamics.speaking,
-              interruption: payload.audioDynamics.interruption,
-              sensors: sensorRef.current ? { ...sensorRef.current, engagement } : undefined,
-            }),
-          });
-          if (!res.ok) return;
-          const j = await res.json();
-          if (!cancelled && j?.suggestion) {
-            setSuggestion(j.suggestion);
-            if (outputMode === "voice" && j?.suggestion) {
-              speakRef.current?.speak(String(j.suggestion).slice(0, 180));
-            }
-          }
         }
       } catch {}
     }, 1000);
@@ -341,7 +365,7 @@ export default function Home() {
       cancelled = true;
       clearInterval(iv);
     };
-  }, [consented, paused, levels.rms, levels.speaking, interruption, useStream, notes, outputMode]);
+  }, [consented, paused, demoMode, levels.rms, levels.speaking, interruption, notes, outputMode]);
 
   // Load current backend context on component mount
   useEffect(() => {
@@ -514,7 +538,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-200 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
-      {!consented && (
+      {!consented && !demoMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
             <h2 className="mb-2 text-2xl font-semibold">Enable AI Assist</h2>
@@ -546,8 +570,20 @@ export default function Home() {
       {/* Hero banner */}
       <div className="mx-auto w-full max-w-6xl px-6 pt-6">
         <div className="rounded-2xl bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
-          <h1 className="text-3xl font-bold drop-shadow-sm">OmniSense</h1>
-          <p className="mt-1 text-sm text-fuchsia-50/90">AI-Powered Social Insight Analysis</p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold drop-shadow-sm">OmniSense</h1>
+              <p className="mt-1 text-sm text-fuchsia-50/90">AI-Powered Social Insight Analysis</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="rounded-md border border-white/30 bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20" onClick={()=>setSidebarOpen(v=>!v)}>
+                {sidebarOpen ? "Hide settings" : "Show settings"}
+              </button>
+              <button className={`rounded-md px-3 py-2 text-sm font-medium text-white ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/20 hover:bg-white/30"}`} onClick={()=>setDemoMode(v=>!v)}>
+                {demoMode ? "Demo: ON" : "Demo"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -652,7 +688,7 @@ export default function Home() {
         </div>
 
         {/* Sidebar */}
-        <aside className="md:col-span-3 hidden md:block">
+        <aside className={`md:col-span-3 hidden ${sidebarOpen ? "md:block" : "md:hidden"}`}>
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
             <div className="mb-3 flex items-center gap-2">
               <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-400" : "bg-slate-500"}`} />
@@ -676,11 +712,7 @@ export default function Home() {
               </label>
               <label className="flex items-center justify-between gap-3">
                 <span className="text-slate-300">Privacy</span>
-                <select className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow" value={privacyMode} onChange={async (e)=>{ const v = e.target.value as "off"|"local"|"cloud"; setPrivacyMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }}>
-                  <option value="cloud" className="text-gray-800">Cloud</option>
-                  <option value="local" className="text-gray-800">Local</option>
-                  <option value="off" className="text-gray-800">Off</option>
-                </select>
+                <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
               </label>
               <label className="flex items-center justify-between gap-3">
                 <span className="text-slate-300">Stream Mode</span>
@@ -699,7 +731,7 @@ export default function Home() {
               <div className="mt-3 space-y-3 text-sm">
                 <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
                 <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
-                <label className="flex items-center justify-between"><span>Stream Mode</span><input type="checkbox" checked={useStream} onChange={(e)=>setUseStream(e.target.checked)} /></label>
+                {/* Stream Mode is always ON */}
                 <button className="w-full rounded-md border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                   Check API Health
                 </button>
