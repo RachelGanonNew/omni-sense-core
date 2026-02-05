@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBridge } from "../lib/glassesBridge";
 import type { GlassesBridge, SensorSample } from "../lib/glassesBridge";
 import { createLiveVoice } from "../lib/liveVoice";
+import UserJourneyStatus from "../components/UserJourneyStatus";
 
 type Levels = {
   rms: number;
@@ -22,7 +23,6 @@ export default function Home() {
   const [summary, setSummary] = useState<string>("");
   const [actions, setActions] = useState<Array<any>>([]);
   const [extracting, setExtracting] = useState(false);
-  const [trainerOpen, setTrainerOpen] = useState(false);
   const [useStream, setUseStream] = useState(false);
   const [sysInstr, setSysInstr] = useState<string>("");
   const [prefs, setPrefs] = useState<string>("{}");
@@ -56,7 +56,6 @@ export default function Home() {
   const [auditFilter, setAuditFilter] = useState<"all" | "pass" | "fail">("all");
   const [artifacts, setArtifacts] = useState<{ name: string; path: string }[]>([]);
   const coachLastRef = useRef<number>(0);
-  const [judgeMsg, setJudgeMsg] = useState<string>("");
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -340,9 +339,8 @@ export default function Home() {
     };
   }, [consented, paused, levels.rms, levels.speaking, interruption, useStream, notes, outputMode]);
 
-  // Load current backend context when trainer opens
+  // Load current backend context on component mount
   useEffect(() => {
-    if (!trainerOpen) return;
     (async () => {
       try {
         const res = await fetch("/api/omnisense/context");
@@ -355,7 +353,7 @@ export default function Home() {
         if (j?.preferences?.privacyMode) setPrivacyMode(j.preferences.privacyMode);
       } catch {}
     })();
-  }, [trainerOpen]);
+  }, []);
 
   // Load preferences at app start for header toggles
   useEffect(() => {
@@ -522,6 +520,7 @@ export default function Home() {
             <div className="flex gap-3">
               <button
                 className="rounded-md bg-black px-4 py-2 text-white dark:bg-white dark:text-black"
+                data-testid="consent-enable"
                 onClick={async () => {
                   setConsented(true);
                   await start();
@@ -545,11 +544,12 @@ export default function Home() {
           <div className={`h-3 w-3 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-zinc-400"}`} />
           <span className="text-sm">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
         </div>
+        
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            Output
+          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium">Output</span>
             <select
-              className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
+              className="bg-gradient-to-br from-blue-500 to-purple-600 text-white px-3 py-2 rounded-xl shadow-lg transition-all duration-300 hover:scale-105"
               value={outputMode}
               onChange={async (e) => {
                 const v = e.target.value as "text" | "voice";
@@ -559,11 +559,12 @@ export default function Home() {
                 } catch {}
               }}
             >
-              <option value="text">Text</option>
-              <option value="voice">Voice</option>
+              <option value="text" className="text-gray-800">Text</option>
+              <option value="voice" className="text-gray-800">Voice</option>
             </select>
           </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium">Conversational Voice</span>
             <input
               type="checkbox"
               checked={convMode}
@@ -579,13 +580,13 @@ export default function Home() {
                 }
               }}
               disabled={privacyMode !== "cloud"}
+              className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md border-2 border-purple-400 text-white transition-all duration-300 hover:scale-110"
             />
-            Conversational Voice
           </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            Privacy
+          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium">Privacy</span>
             <select
-              className="rounded border border-zinc-300 bg-transparent p-1 text-xs dark:border-zinc-700"
+              className="bg-gradient-to-br from-blue-500 to-purple-600 text-white px-3 py-2 rounded-xl shadow-lg transition-all duration-300 hover:scale-105"
               value={privacyMode}
               onChange={async (e) => {
                 const v = e.target.value as "off" | "local" | "cloud";
@@ -595,17 +596,21 @@ export default function Home() {
                 } catch {}
               }}
             >
-              <option value="cloud">Cloud</option>
-              <option value="local">Local</option>
-              <option value="off">Off</option>
+              <option value="cloud" className="text-gray-800">Cloud</option>
+              <option value="local" className="text-gray-800">Local</option>
+              <option value="off" className="text-gray-800">Off</option>
             </select>
           </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            <input type="checkbox" checked={useStream} onChange={(e) => setUseStream(e.target.checked)} />
-            Stream Mode
+          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium">Stream Mode</span>
+            <input type="checkbox" checked={useStream} onChange={(e) => setUseStream(e.target.checked)} className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md border-2 border-purple-400 text-white transition-all duration-300 hover:scale-110" />
           </label>
           <button
-            className={`rounded-md border px-3 py-1.5 text-sm ${glassesConnected ? "bg-emerald-600 text-white" : ""}`}
+            className={`relative px-4 py-2 text-sm font-medium text-white rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
+              glassesConnected 
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-emerald-500/25" 
+                : "bg-gradient-to-r from-blue-500 to-purple-600 shadow-blue-500/25"
+            }`}
             onClick={() => {
               if (glassesConnected) {
                 setGlassesConnected(false);
@@ -615,57 +620,31 @@ export default function Home() {
             }}
             title="Connect AI Glasses (simulated)"
           >
-            {glassesConnected ? "Glasses: Connected" : "Connect Glasses"}
+            <span className="flex items-center gap-2">
+              {glassesConnected ? "🥽" : "👓"}
+              {glassesConnected ? "Glasses Connected" : "Connect Glasses"}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
           </button>
-          <button
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
-            onClick={() => setTrainerOpen((v) => !v)}
-          >
-            {trainerOpen ? "Close Trainer" : "Open Trainer"}
-          </button>
-          <button
-            className="rounded-md border border-emerald-600 px-3 py-1.5 text-sm text-emerald-700 dark:text-emerald-400"
-            title="One-click judge demo: run agent loop and export report"
-            onClick={async () => {
-              setJudgeMsg("Running judge demo...");
-              try {
-                const runRes = await fetch("/api/agent/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal: "Judge Demo: Prepare follow-up plan and assign owners", steps: 3, maxToolsPerStep: 2 }) });
-                const runJson = await runRes.json();
-                if (!runRes.ok) throw new Error(runJson?.error || "run failed");
-                const repRes = await fetch("/api/audit/report", { method: "POST" });
-                const repJson = await repRes.json();
-                if (!repRes.ok) throw new Error(repJson?.error || "export failed");
-                setJudgeMsg(`Demo complete. Report: ${repJson.artifact}`);
-              } catch (e: any) {
-                setJudgeMsg(`error: ${e?.message || String(e)}`);
-              }
-            }}
-          >
-            Start Judge Demo
-          </button>
-          {judgeMsg && <span className="text-xs text-emerald-700 dark:text-emerald-400">{judgeMsg}</span>}
-          <button
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
-            onClick={() => {
-              if (!consented) return;
-              setPaused((p) => {
-                const np = !p;
-                if (np) {
-                  stopAudio();
-                  stopStream();
-                } else {
-                  start();
-                }
-                return np;
-              });
-            }}
-          >
-            {paused ? "Resume" : "Pause"}
-          </button>
-        </div>
+          </div>
       </header>
 
       <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-2">
+        {/* User Journey Status */}
+        <div className="md:col-span-2">
+          <UserJourneyStatus
+            consented={consented}
+            paused={paused}
+            outputMode={outputMode}
+            convMode={convMode}
+            privacyMode={privacyMode}
+            speakingSeconds={speakingSeconds}
+            intensityPct={intensityPct}
+          />
+        </div>
+
         {showGlassesModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
             <div className="w-full max-w-md rounded-xl bg-white p-5 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
@@ -702,7 +681,7 @@ export default function Home() {
             </div>
           </div>
         )}
-        <section className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 video-container">
           <video ref={videoRef} className="h-[280px] w-full rounded-lg bg-black object-cover" muted playsInline />
           <div className="mt-4">
             <div className="mb-2 text-sm font-medium">Speaking intensity</div>
@@ -716,7 +695,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 suggestions-container">
           <h3 className="text-lg font-semibold">Live Suggestions</h3>
           {interruption && (
             <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
@@ -1015,62 +994,6 @@ export default function Home() {
           )}
         </section>
 
-        {trainerOpen && (
-          <section className="md:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="mb-2 text-lg font-semibold">OmniSense Trainer</h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1 text-sm font-medium">System Instruction</div>
-                <textarea
-                  className="h-48 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
-                  value={sysInstr}
-                  onChange={(e) => setSysInstr(e.target.value)}
-                />
-              </div>
-              <div>
-                <div className="mb-1 text-sm font-medium">Preferences (JSON)</div>
-                <textarea
-                  className="h-48 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm font-mono outline-none focus:border-zinc-500 dark:border-zinc-700"
-                  value={prefs}
-                  onChange={(e) => setPrefs(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="mb-1 text-sm font-medium">History Snippet</div>
-              <textarea
-                className="h-20 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
-                value={hist}
-                onChange={(e) => setHist(e.target.value)}
-              />
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <button
-                className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
-                onClick={saveContext}
-                disabled={savingCtx}
-              >
-                {savingCtx ? "Saving..." : "Save Context"}
-              </button>
-              <button
-                className="rounded-md border px-3 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                onClick={testAnalyze}
-              >
-                Test Analyze
-              </button>
-            </div>
-            {analyzeOut && (
-              <>
-              <div className="mt-4 mb-1 text-xs text-zinc-600 dark:text-zinc-300">
-                {analyzeConfidence != null ? `Confidence: ${(analyzeConfidence * 100).toFixed(0)}%` : ""}
-              </div>
-              <pre className="max-h-64 overflow-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950">
-{analyzeOut}
-              </pre>
-              </>
-            )}
-          </section>
-        )}
       </main>
     </div>
   );

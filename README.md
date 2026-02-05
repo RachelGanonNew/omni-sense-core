@@ -2,173 +2,214 @@
 
 Proactive, privacy-first multimodal "Cognitive Second Brain" for meetings and safety, built for the Gemini 3 Hackathon.
 
-## Setup
-- Requirements: Node 18+, a Google Gemini API key.
-- Create `.env.local` in project root:
+## 🚀 Quick Start Guide
+
+### Step 1: Prerequisites
+- **Node.js 18+** installed on your system
+- **Google Gemini API key** (get one from [Google AI Studio](https://aistudio.google.com/))
+
+### Step 2: Setup Project
+1. Clone or download this project
+2. Create a `.env.local` file in the project root
+3. Add your API credentials:
 
 ```
-GEMINI_API_KEY=your_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-3.0-pro
 ```
 
-## Run
-- Dev: `npm run dev` → http://localhost:3000
-- Prod build: `npm run build`
-- Prod serve: `npm run start` → http://localhost:3000
+### Step 3: Run the Application
+```bash
+# Install dependencies
+npm install
 
-## Key Screens
-- Home: live mic/cam assist, speaking intensity, interruption nudge, suggestions, Trainer panel.
-- Upload: extract frames from a video and get a structured JSON insight with Confidence.
+# Start development server
+npm run dev
+```
 
-## Endpoints
-- POST `/api/omnisense/analyze` — live JSON insight with confidence.
-- POST `/api/omnisense/analyze-frames` — frames + transcript → JSON insight with confidence.
-- GET  `/api/omnisense/analyze/stream` — streaming demo of insight.
-- GET/POST `/api/omnisense/context` — system instruction, preferences, history.
-- POST `/api/extract-actions` — summarize notes to action items.
-- POST `/api/suggest` — lightweight suggestions from audio dynamics.
-- GET  `/api/evaluate` — synthetic scenarios for prompt QA.
-- GET  `/api/local-video` — dev-only stream for `C:/Users/USER/Downloads/a.mp4`.
-- GET  `/api/health` — liveness check.
+Open **http://localhost:3000** in your browser
 
-## Evaluation & Prompt QA
-- Open `/api/evaluate` to run synthetic cases and get average confidence.
-- Tune Trainer system instruction/preferences and re-run to iterate.
+### Step 4: Basic Usage Flow
+1. **Home Screen** - Enable mic/cam for real-time meeting assistance
+2. **Upload Screen** - Analyze video recordings for insights
+3. **Trainer Panel** - Customize AI behavior and preferences
+4. **Verification/Audit** - Review session history and generate reports
 
-## Privacy
-- No raw audio/video persisted. Only brief context and settings stored in `.data/omni.json` for local use.
-- Prompts instruct Gemini to avoid sensitive attribute inference or identity claims.
+## 📖 Detailed Features
+
+### Core Screens
+- **Home**: Live mic/cam assistance, speaking intensity monitoring, interruption detection, real-time suggestions, and AI trainer panel
+- **Upload**: Extract frames from videos and get structured JSON insights with confidence scores
+- **Trainer**: Fine-tune AI system instructions, preferences, and conversation history
+- **Verification/Audit**: Review session timeline, verify AI actions, and export HTML reports
+
+## 🔧 API Endpoints
+
+### Analysis & Insights
+- `POST /api/omnisense/analyze` - Get real-time AI insights from live context
+- `POST /api/omnisense/analyze-frames` - Analyze video frames with transcript
+- `GET /api/omnisense/analyze/stream` - Streaming insights demo
+
+### Configuration & Management
+- `GET/POST /api/omnisense/context` - Manage AI instructions and preferences
+- `POST /api/extract-actions` - Convert notes to actionable tasks
+- `POST /api/suggest` - Get coaching suggestions from audio patterns
+
+### Testing & Development
+- `GET /api/evaluate` - Test AI with synthetic scenarios
+- `GET /api/local-video` - Development video streaming
+- `GET /api/health` - System health check
+
+## 🎯 How It Works
+
+### User Workflow
+1. **Start Session** - Enable microphone/camera on Home screen
+2. **Real-time Analysis** - AI provides live coaching and insights
+3. **Video Upload** - Analyze recorded meetings for detailed insights
+4. **Customize AI** - Use Trainer to adjust AI behavior
+5. **Review Results** - Check verification panel for session summary
+
+### AI Process Flow
+```
+User Input (Audio/Video) 
+    ↓
+Feature Detection (Speaking patterns, interruptions)
+    ↓
+AI Analysis (Gemini 3 reasoning)
+    ↓
+Actionable Insights + Confidence Score
+    ↓
+User Feedback & Verification
+```
+
+## 🛡️ Privacy & Security
+
+### Privacy Modes
+- **Cloud Mode**: Full AI features with cloud processing
+- **Local Mode**: Basic features without external API calls
+- **Off Mode**: Analysis disabled, maximum privacy
+
+### Data Protection
+- No raw audio/video files stored permanently
+- Only brief context and settings saved locally in `.data/omni.json`
+- AI instructed to avoid sensitive personal information
+- Rate limiting on analysis endpoints
+
+## 🚀 Deployment
+
+### Production Build
+```bash
+npm run build
+npm run start
+```
+
+### Vercel (Recommended)
+1. Connect repository to Vercel
+2. Set environment variables: `GEMINI_API_KEY`, `GEMINI_MODEL`
+3. Deploy and visit your public URL
+
+### Netlify
+1. Use included `netlify.toml` configuration
+2. Set same environment variables
+3. Deploy with Next.js plugin
+
+## 🔍 Optional Features
 
 ### Research Provider (Web Enrichment)
-- Endpoint: `GET /api/research?name=Full%20Name`
-- Behavior by privacy mode:
-  - `off`: blocked (403), no web calls.
-  - `local`: returns a local message; no outbound requests.
-  - `cloud`: uses Google Custom Search if configured, else falls back to Wikipedia.
-- Optional env vars to enable Google Search:
-  - `GOOGLE_API_KEY=...`
-  - `GOOGLE_CSE_ID=...`
-  - Without these, Wikipedia summary is used.
+- **Endpoint**: `GET /api/research?name=Full%20Name`
+- **Privacy Mode Behavior**:
+  - **Off**: Blocked (403), no web calls
+  - **Local**: Returns local message only
+  - **Cloud**: Uses Google Search or Wikipedia fallback
+- **Setup** (Optional):
+  ```
+  GOOGLE_API_KEY=your_google_api_key
+  GOOGLE_CSE_ID=your_custom_search_engine_id
+  ```
 
-## Security
-- Basic per-IP rate limiting on analysis routes.
-- Schema coercion for outputs; Gemini self-check for confidence.
+### AI Glasses Integration (Hybrid Mode)
+- Toggle "Connect Glasses" button in header
+- **Simulated Mode**: Demo with head motion, brightness, temperature data
+- **Real SDK**: Placeholder for vendor-specific integration
+- Enhanced suggestions with sensor data context
 
-## Optional Hybrid Mode: AI Glasses
-- Toggle via the "Connect Glasses" button in the header.
-- Adapters:
-  - Simulated: emits `headMotion`, `brightness`, `temp` for demos.
-  - Vendor X (placeholder): scaffolded adapter to wire a real SDK (Web Bluetooth/WebUSB/WebRTC).
-- When connected, live suggestions include `visionHints.sensors` for richer context.
-- A compact sensor debug line appears under Live Suggestions.
-- Privacy applies as usual; avoid sending raw sensor data in `local` mode.
+## 🧪 Testing & Quality Assurance
 
-## Submission Checklist (Devpost)
-- Public demo URL or interactive app: deploy to Vercel/Netlify and include link.
-- ~3-minute demo video showcasing Upload, Trainer, and Live features.
-- 200-word Gemini usage write-up: see `SUBMISSION.md`.
-- Public code repository: this repo.
-- License: MIT (see `LICENSE`).
+### Quick Demo Path
+1. Visit `/upload` → Click "Load default" → Analyze
+2. Paste notes in Home screen → Extract Actions
+3. Open Trainer → Edit instructions → Test with `/api/evaluate`
 
-## Deploy
-- Vercel (recommended):
-  - Create a new project from this repo.
-  - Set Environment Variables: `GEMINI_API_KEY`, `GEMINI_MODEL`.
-  - Deploy. Open the public URL and verify `/api/health`.
-- Netlify:
-  - Use included `netlify.toml` and Next.js plugin.
-  - Set env vars as above.
+### Evaluation System
+- Built-in synthetic scenarios for testing
+- Confidence scoring for AI responses
+- Iterative prompt improvement through Trainer panel
 
-## Judges’ Quick Path
-1) Visit `/upload`, click "Load default", then Analyze → see insight + Confidence.
-2) Paste notes in Home → Extract Actions.
-3) Open Trainer, tweak system instruction → re-run `/api/evaluate`.
+## 🐛 Troubleshooting
 
-For a detailed overview and demo script, see `SUBMISSION.md`.
+### Common Issues
+- **API Key Problems**: Ensure `GEMINI_API_KEY` is valid and in `.env.local`
+- **Network Issues**: Check firewall allows HTTPS to Google APIs
+- **Privacy Mode**: Cloud mode required for full features
+- **Demo Mode**: Works without keys but with limited functionality
 
-## Troubleshooting
-- Privacy modes
-  - Cloud: full features enabled.
-  - Local: no outbound web/model calls; endpoints return local heuristics.
-  - Off: analysis/research endpoints return 403.
-- No API keys
-  - Without `GEMINI_API_KEY`, analyze endpoints respond with safe demo insights for public demos.
-  - Without `GOOGLE_API_KEY` and `GOOGLE_CSE_ID`, `/api/research` falls back to Wikipedia.
-- Network/TLS issues
-  - Ensure outbound HTTPS (443) to Google APIs is allowed (VPN/Firewall can block).
-  - Retries/backoff/timeout are built in; transient errors usually resolve on retry.
-  - If a corporate network blocks requests, try a hotspot or whitelist the app.
+### Health Checks
+```bash
+# Test API health
+curl http://localhost:3000/api/health
 
-## Judge Guide: Why This Wins the Action Era
+# Test evaluation system
+curl http://localhost:3000/api/evaluate
+```
 
-- **Orchestrator, not a prompt wrapper**
-  - Server-side agent with structured tool calling, long-context assembly, verification artifacts, and audit timeline.
-  - Multi-step runs with goals, tool execution, and self-checks.
+## 📋 Judge Demo Checklist
 
-- **Temporal reasoning and real-time coaching**
-  - Client detectors (dominance, overlap, engagement drop) trigger agent actions and on-the-spot coaching.
-  - Cooldowns, privacy controls, and voice output via Live/TTS.
+### Quick Demo (3-5 minutes)
+1. **Upload Demo**: Load default video → Analyze → Review insights
+2. **Action Extraction**: Paste meeting notes → Generate action items
+3. **Live Features**: Enable mic/cam → Test real-time coaching
+4. **Verification**: Review session timeline → Export HTML report
 
-- **Long-context continuity**
-  - Session + logs + tasks merged into a compact long-context injected into prompts.
-  - Rolling artifacts: tasks.json, notes.md, verify/*.jsonl, audit_*.html.
+### Production Features
+- Autonomous agent runs with goal completion
+- Temporal reasoning and real-time coaching
+- Long-context continuity across sessions
+- Verification artifacts and audit trails
 
-- **Verification and auditability**
-  - Endpoints: /api/audit/timeline and /api/audit/report.
-  - HTML audit report with PASS/FAIL entries, recent logs, and session summary.
-
-## Quick Demo Script (5–7 minutes)
-
-1. Start the app and enable AI Assist (mic/cam allowed).
-2. Turn on Conversational Voice and set Privacy to Cloud.
-3. Trigger detections:
-   - Dominance: speak for ~10s; hear a concise coaching cue.
-   - Overlap: create a quick loud spike; see detection + coaching.
-4. Autonomous Run:
-   - In the Autonomous Run panel, set goal: "Prepare follow-up plan and assign owners"; click Run.
-   - After it completes, open Verification/Audit and Export HTML Report.
-5. Show artifacts in `.data/verify/` and timeline counts in the panel.
-6. (Optional) Use Extract Actions with a short note; show generated actions and calendar link.
-
-## Criteria Mapping
-
-- Action Era Orchestrator: tools registry, multi-step loops, verification artifacts.
-- Long Context: assembled context injected every step with rolling summaries.
-- Temporal Understanding: detectors feed actions + coaching.
-- Verification/Audit: JSONL + HTML report; PASS/FAIL and artifacts.
-- Privacy & Safety: modes (off/local/cloud), cooldowns, and no sensitive inferences.
-
-## Deployment Notes
-
-- Environment: set GEMINI_API_KEY (required), optionally GOOGLE_API_KEY and GOOGLE_CSE_ID.
-- Build: `npm run build` then `npm run start`.
-- Public demo: local-only features work without keys; full features require Cloud privacy mode and keys.
-
-## Architecture (High Level)
+## 🏗️ Architecture Overview
 
 ```
 Browser (Next.js App)
-  ├─ Live mic/cam + temporal detectors (dominance/overlap/engagement)
-  ├─ Conversational Voice (Live) + TTS fallback
-  ├─ Panels: Detections • Autonomous Run • Verification/Audit
-  └─ Calls APIs: /api/agent/act, /api/agent/run, /api/audit/*
+├─ Live mic/cam + temporal detectors
+├─ Conversational Voice + TTS
+├─ Panels: Detections • Autonomous Run • Verification
+└─ API calls to /api/agent/* and /api/audit/*
 
 Server (Next API Routes)
-  ├─ Agent Orchestrator
-  │   ├─ Build prompt with LongContext (session+logs+tasks)
-  │   ├─ Gemini 3 Pro call → tool_calls JSON
-  │   ├─ Execute Tools (function calling)
-  │   │   ├─ tasks.create / tasks.update_status
-  │   │   ├─ calendar.create_event • memory.write • notes.write
-  │   │   └─ web.search (Google CSE / Wikipedia)
-  │   ├─ Verification: agent.verify_step (JSONL + timeline)
-  │   └─ Thought Signatures & Levels (L1/L2; L3 escalation when needed)
-  ├─ Audit/Report: timeline, artifacts, latest report
-  └─ Stores (./.data): agent.json, agent.log, tasks.json, notes.md, verify/*
+├─ Agent Orchestrator
+│   ├─ Long-context assembly (session + logs + tasks)
+│   ├─ Gemini 3 Pro calls → structured tool execution
+│   ├─ Verification system (JSONL + timeline)
+│   └─ Tools: tasks, calendar, memory, notes, web search
+├─ Audit/Report generation
+└─ Local storage in .data/ directory
 
-Gemini 3 Pro (Google AI Studio)
-  └─ Reasoning over large context; returns structured tool calls
+Gemini 3 Pro (Google AI)
+└─ Multimodal reasoning with structured outputs
 ```
 
-Level 3 escalation: If tools are attempted but none succeed, the agent documents uncertainty, emits an escalation event, and records a failed verification step. This is visible in the audit timeline and HTML report.
+## 📄 License
+
+MIT License - See `LICENSE` file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Test with evaluation system
+4. Submit pull request
+
+---
+
+**For detailed demo scripts and technical specifications, see `SUBMISSION.md`**
 
