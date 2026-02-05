@@ -23,7 +23,7 @@ export default function Home() {
   const [summary, setSummary] = useState<string>("");
   const [actions, setActions] = useState<Array<any>>([]);
   const [extracting, setExtracting] = useState(false);
-  const [useStream, setUseStream] = useState(false);
+  const [useStream, setUseStream] = useState(true);
   const [sysInstr, setSysInstr] = useState<string>("");
   const [prefs, setPrefs] = useState<string>("{}");
   const [hist, setHist] = useState<string>("");
@@ -56,6 +56,10 @@ export default function Home() {
   const [auditFilter, setAuditFilter] = useState<"all" | "pass" | "fail">("all");
   const [artifacts, setArtifacts] = useState<{ name: string; path: string }[]>([]);
   const coachLastRef = useRef<number>(0);
+  const [showDemo, setShowDemo] = useState<boolean>(false);
+  const [showDetectionsSidebar, setShowDetectionsSidebar] = useState<boolean>(true);
+  const [showAuditLink, setShowAuditLink] = useState<boolean>(true);
+  const [healthMsg, setHealthMsg] = useState<string>("");
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -509,7 +513,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-slate-950 to-slate-900 text-slate-100">
+    <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-200 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
       {!consented && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
@@ -530,7 +534,7 @@ export default function Home() {
               </button>
               <button
                 className="rounded-md border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-                onClick={() => setConsented(false)}
+                onClick={() => { try { teardown(); } catch {}; setConsented(false); }}
               >
                 Not now
               </button>
@@ -593,26 +597,20 @@ export default function Home() {
           </label>
           <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
             <span className="font-medium">Privacy</span>
-            <select
-              className="bg-gradient-to-br from-blue-500 to-purple-600 text-white px-3 py-2 rounded-xl shadow-lg transition-all duration-300 hover:scale-105"
-              value={privacyMode}
+            <input
+              type="checkbox"
+              checked={privacyMode !== "off"}
               onChange={async (e) => {
-                const v = e.target.value as "off" | "local" | "cloud";
-                setPrivacyMode(v);
+                const v = e.target.checked ? "cloud" : "off";
+                setPrivacyMode(v as any);
                 try {
                   await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) });
                 } catch {}
               }}
-            >
-              <option value="cloud" className="text-gray-800">Cloud</option>
-              <option value="local" className="text-gray-800">Local</option>
-              <option value="off" className="text-gray-800">Off</option>
-            </select>
+              className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md border-2 border-purple-400 text-white transition-all duration-300 hover:scale-110"
+            />
           </label>
-          <label className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="font-medium">Stream Mode</span>
-            <input type="checkbox" checked={useStream} onChange={(e) => setUseStream(e.target.checked)} className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md border-2 border-purple-400 text-white transition-all duration-300 hover:scale-110" />
-          </label>
+          {/* Stream Mode forced ON; toggle removed */}
           <button
             className={`relative px-4 py-2 text-sm font-medium text-white rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
               glassesConnected 
@@ -639,9 +637,9 @@ export default function Home() {
           </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-2">
+      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-12">
         {/* User Journey Status */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-12">
           <UserJourneyStatus
             consented={consented}
             paused={paused}
@@ -652,6 +650,80 @@ export default function Home() {
             intensityPct={intensityPct}
           />
         </div>
+
+        {/* Sidebar */}
+        <aside className="md:col-span-3 hidden md:block">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <div className="mb-3 flex items-center gap-2">
+              <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-400" : "bg-slate-500"}`} />
+              <span className="text-xs">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
+            </div>
+            <button className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500" onClick={async ()=>{ setConsented(true); await start(); }}>Start Camera</button>
+          </div>
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <h3 className="mb-3 text-sm font-semibold text-slate-200">Settings</h3>
+            <div className="space-y-4 text-sm">
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-slate-300">Output</span>
+                <select className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
+                  <option value="text" className="text-gray-800">Text</option>
+                  <option value="voice" className="text-gray-800">Voice</option>
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-slate-300">Conversational Voice</span>
+                <input type="checkbox" checked={convMode} onChange={(e)=>{ const v=e.target.checked; setConvMode(v); if (v){ setUseStream(true); setOutputMode("voice"); } else { setUseStream(false); setOutputMode("text"); } }} disabled={privacyMode!=="cloud"} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-slate-300">Privacy</span>
+                <select className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow" value={privacyMode} onChange={async (e)=>{ const v = e.target.value as "off"|"local"|"cloud"; setPrivacyMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }}>
+                  <option value="cloud" className="text-gray-800">Cloud</option>
+                  <option value="local" className="text-gray-800">Local</option>
+                  <option value="off" className="text-gray-800">Off</option>
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-slate-300">Stream Mode</span>
+                {/* Stream Mode forced ON; toggle removed */}
+                <span className="text-xs text-slate-400">Always on</span>
+              </label>
+              <button className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white ${glassesConnected?"bg-emerald-600 hover:bg-emerald-500":"bg-indigo-600 hover:bg-indigo-500"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
+              <button className="w-full rounded-md border border-white/20 px-3 py-1.5 text-xs hover:bg-white/60" onClick={()=>{ try { teardown(); } catch {}; setConsented(false); }}>Close App</button>
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
+              {showDemo ? "▼" : "►"} Demo Mode
+            </button>
+            {showDemo && (
+              <div className="mt-3 space-y-3 text-sm">
+                <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
+                <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
+                <label className="flex items-center justify-between"><span>Stream Mode</span><input type="checkbox" checked={useStream} onChange={(e)=>setUseStream(e.target.checked)} /></label>
+                <button className="w-full rounded-md border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
+                  Check API Health
+                </button>
+                {showAuditLink && (
+                  <a className="block rounded-md border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10" href="/audit">Open Verification/Audit</a>
+                )}
+                {healthMsg && <div className="text-xs text-slate-400">{healthMsg}</div>}
+              </div>
+            )}
+          </div>
+          {showDetectionsSidebar && detections.length>0 && (
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <h3 className="mb-2 text-sm font-semibold">Recent Detections</h3>
+              <div className="flex flex-col gap-1 text-xs">
+                {detections.slice(0,5).map((d,i)=> (
+                  <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded border border-white/10 px-2 py-1">
+                    <span className="truncate"><span className="mr-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{d.kind}</span>{d.info||""}</span>
+                    <span className="text-slate-400">{new Date(d.t).toLocaleTimeString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
 
         {showGlassesModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -689,73 +761,32 @@ export default function Home() {
             </div>
           </div>
         )}
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur video-container">
-          <h3 className="mb-3 text-lg font-semibold">Live Webcam Stream</h3>
-          <video ref={videoRef} className="h-[280px] w-full rounded-lg bg-black object-cover" muted playsInline />
-          <div className="mt-4">
-            <button
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-              onClick={async ()=>{ setConsented(true); await start(); }}
-            >Start Camera</button>
-            <div className="mt-4 mb-2 text-sm font-medium">Speaking intensity</div>
-            <div className="h-3 w-full rounded-full bg-slate-800">
-              <div
-                className="h-3 rounded-full bg-emerald-500 transition-[width] duration-75"
-                style={{ width: `${intensityPct}%` }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-slate-300">You spoke ~{speakingSeconds}s</div>
-          </div>
-        </section>
-
-        <section className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur suggestions-container">
-          <h3 className="text-lg font-semibold">Live Suggestions</h3>
+        {/* Live Suggestions only; camera runs in background */}
+        <section className="md:col-span-9 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-2 text-lg font-semibold">Live Suggestions</h3>
           {interruption && (
-            <div className="rounded-md border border-amber-700/50 bg-amber-900/30 p-3 text-amber-200">
+            <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
               {interruption}
             </div>
           )}
-          <div className="rounded-md border border-white/10 p-3 text-sm text-slate-200">
+          <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">
             {suggestion}
           </div>
-          {glassesConnected && sensorSample && (
-            <div className="text-xs text-slate-400">
-              {reconnecting ? (
-                <span className="text-amber-400">Glasses • reconnecting…</span>
-              ) : (
-                <>
-                  Glasses • motion {String(sensorSample.headMotion || "-")} • light {sensorSample.brightness != null ? `${Math.round(sensorSample.brightness * 100)}%` : "-"} • temp {sensorSample.temp != null ? `${sensorSample.temp.toFixed(1)}°C` : "-"} • engagement {engagement}
-                </>
-              )}
-            </div>
-          )}
+          <div className="mt-2 text-xs text-slate-500">Updated continuously in the background.</div>
+          <video ref={videoRef} className="hidden h-[1px] w-[1px]" muted playsInline />
+        </section>
 
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/10"
-              onClick={async () => {
-                try { await fetch("/api/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ improved: true }) }); } catch {}
-              }}
-            >
-              Helpful
-            </button>
-            <button
-              className="rounded-md border border-white/10 px-2 py-1 text-xs hover:bg-white/10"
-              onClick={async () => {
-                try { await fetch("/api/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ falsePositive: true }) }); } catch {}
-              }}
-            >
-              Not relevant
-            </button>
-          </div>
-
-          <div className="mt-2 text-xs text-slate-400">Suggestions update as audio dynamics change.</div>
+        {/* Compact feedback row */}
+        <section className="md:col-span-9 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm">
+          <button className="rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50" onClick={async()=>{ try { await fetch('/api/agent/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({improved:true})}); } catch {} }}>Helpful</button>
+          <button className="rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50" onClick={async()=>{ try { await fetch('/api/agent/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({falsePositive:true})}); } catch {} }}>Not relevant</button>
+          <span className="text-slate-500">Suggestions update continuously in the background.</span>
         </section>
 
         
 
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="text-lg font-semibold">Autonomous Run</h3>
+        <section className="md:col-span-12 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold">Planner</h3>
           <div className="flex items-center gap-2">
             <input
               className="flex-1 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
@@ -788,145 +819,10 @@ export default function Home() {
           {runResult && <div className="text-xs text-zinc-600 dark:text-zinc-400">{runResult}</div>}
         </section>
 
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="text-lg font-semibold">Verification / Audit</h3>
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
-              onClick={async () => {
-                setAuditMsg("Loading timeline...");
-                try {
-                  const res = await fetch("/api/audit/timeline");
-                  const json = await res.json();
-                  if (!res.ok) throw new Error(json?.error || "failed");
-                  setAudit(json);
-                  setAuditMsg("");
-                } catch (e: any) {
-                  setAuditMsg(`error: ${e?.message || String(e)}`);
-                }
-              }}
-            >
-              Refresh Timeline
-            </button>
-            <button
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
-              onClick={async () => {
-                setAuditMsg("Exporting...");
-                try {
-                  const res = await fetch("/api/audit/report", { method: "POST" });
-                  const json = await res.json();
-                  if (!res.ok) throw new Error(json?.error || "failed");
-                  setAuditMsg(`Exported: ${json.artifact}`);
-                } catch (e: any) {
-                  setAuditMsg(`error: ${e?.message || String(e)}`);
-                }
-              }}
-            >
-              Export HTML Report
-            </button>
-            <a
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-              href="/api/audit/report/latest"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open Latest Report
-            </a>
-            <button
-              className="rounded-md border border-emerald-600 px-3 py-1.5 text-sm text-emerald-700 dark:text-emerald-400"
-              title="Run a demo loop and export a report"
-              onClick={async () => {
-                setAuditMsg("Running demo...");
-                try {
-                  const runRes = await fetch("/api/agent/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal: "Prepare follow-up plan and assign owners", steps: 3, maxToolsPerStep: 2 }) });
-                  const runJson = await runRes.json();
-                  if (!runRes.ok) throw new Error(runJson?.error || "run failed");
-                  const repRes = await fetch("/api/audit/report", { method: "POST" });
-                  const repJson = await repRes.json();
-                  if (!repRes.ok) throw new Error(repJson?.error || "export failed");
-                  setAuditMsg(`Demo complete. Report: ${repJson.artifact}`);
-                } catch (e: any) {
-                  setAuditMsg(`error: ${e?.message || String(e)}`);
-                }
-              }}
-            >
-              Demo: Run + Export
-            </button>
-            {auditMsg && <div className="text-xs text-zinc-600 dark:text-zinc-400">{auditMsg}</div>}
-          </div>
-          {audit ? (
-            <div className="flex flex-col gap-2 text-xs">
-              <div className="text-zinc-600 dark:text-zinc-400">Tasks: {(audit.tasks || []).length} • Verify entries: {(audit.verifySteps || []).length} • Logs: {(audit.logs || []).length}</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px]">Filter:</span>
-                <button className={`rounded border px-2 py-0.5 text-[11px] ${auditFilter === "all" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`} onClick={() => setAuditFilter("all")}>All</button>
-                <button className={`rounded border px-2 py-0.5 text-[11px] ${auditFilter === "pass" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`} onClick={() => setAuditFilter("pass")}>PASS</button>
-                <button className={`rounded border px-2 py-0.5 text-[11px] ${auditFilter === "fail" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`} onClick={() => setAuditFilter("fail")}>FAIL</button>
-              </div>
-              <div className="flex flex-col gap-1">
-                {(audit.verifySteps || [])
-                  .filter((v:any)=> auditFilter === "all" ? true : (auditFilter === "pass" ? !!v.pass : v.pass === false))
-                  .slice(-6)
-                  .reverse()
-                  .map((v:any, i:number) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] dark:bg-zinc-800">{new Date((v.ts||Date.now())).toLocaleTimeString()}</span>
-                    <span className={"text-[11px] font-medium " + (v.pass?"text-green-600":"text-red-500")}>{v.pass?"PASS":"FAIL"}</span>
-                    <span className="text-zinc-600 dark:text-zinc-400">{String(v.claim||"").slice(0,120)}</span>
-                  </div>
-                ))}
-              </div>
-              {audit.session?.events && (
-                <div className="mt-2">
-                  <div className="mb-1 text-[11px] font-semibold">Recent Tool Calls</div>
-                  <div className="flex flex-col gap-1">
-                    {audit.session.events.slice(-8).reverse().map((ev:any, idx:number)=>{
-                      const tc = ev?.data?.output?.toolCalls || [];
-                      if (!tc.length) return null;
-                      return (
-                        <div key={idx} className="flex items-center gap-2 text-[11px]">
-                          <span className="rounded bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">{new Date(ev.t).toLocaleTimeString()}</span>
-                          <span className="text-zinc-600 dark:text-zinc-400">{tc.map((x:any)=>x.name).join(", ")}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              <div className="mt-2">
-                <div className="mb-1 text-[11px] font-semibold">Artifacts</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] dark:border-zinc-700"
-                    onClick={async ()=>{
-                      try {
-                        const res = await fetch("/api/audit/artifacts");
-                        const j = await res.json();
-                        if (res.ok) setArtifacts(j.items || []);
-                      } catch {}
-                    }}
-                  >
-                    Refresh
-                  </button>
-                  <div className="text-[11px] text-zinc-500">Shows local file paths</div>
-                </div>
-                <div className="mt-1 flex flex-col gap-1 text-[11px]">
-                  {artifacts.length === 0 ? <div className="text-zinc-500">No artifacts yet.</div> : artifacts.slice(-10).reverse().map((a,i)=> (
-                    <div key={i} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{a.name}</span>
-                      <span className="text-zinc-500 truncate max-w-[50%]" title={a.path}>{a.path}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-xs text-zinc-500">No timeline loaded yet.</div>
-          )}
-        </section>
+        {/* Verification/Audit removed from Home (kept for Demo Mode link elsewhere) */}
 
-        <section className="md:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-2 text-lg font-semibold">Commitments → Action Cards</h3>
+        <section className="md:col-span-12 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="mb-2 text-lg font-semibold">Follow‑ups</h3>
           <textarea
             className="w-full min-h-28 rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
             placeholder="Paste brief meeting notes (or type key commitments)..."
