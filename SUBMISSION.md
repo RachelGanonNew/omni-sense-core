@@ -39,3 +39,40 @@ OmniSense Core uses Gemini 3 as a reasoning engine for multimodal social and saf
 2) Paste notes → extract actions.
 3) Open Trainer, tweak instruction, re-run `/api/evaluate`.
 4) Switch to Home; show speaking intensity and suggestions.
+
+## Judge Demo Checklist (Production)
+
+Live URL: https://omnisense-orchestrator.vercel.app
+
+1. Header setup
+   - Set Privacy: Cloud.
+   - (Optional) Enable Conversational Voice for micro‑coaching.
+2. Start Judge Demo
+   - Click “Start Judge Demo” (header) → runs a 3‑step autonomous loop and exports an HTML report.
+   - Wait for inline status: “Demo complete. Report: …”.
+3. Verification / Audit
+   - Open the Verification/Audit panel.
+   - Click “Refresh Timeline” to load session events and verify steps.
+   - Click “Export HTML Report”; note the artifact path returned.
+   - Use “Refresh” in Artifacts to list recent report/run files.
+4. Temporal coaching (optional)
+   - Speak continuously ~10s to trigger Dominance; listen for a brief coaching cue.
+   - Create a short spike to simulate Overlap.
+
+## Production Smoke Test
+
+1. Health
+   - GET /api/health → { "status": "ok" }
+2. Agent Single Step
+   - POST /api/agent/act with a minimal observation, e.g. { observation: { detection: { kind: "overlap" } }, maxTools: 1 }
+   - Expect JSON with thoughts, toolCalls[], and signature/level.
+3. Agent Run
+   - POST /api/agent/run with { goal: "Prepare follow-up plan", steps: 2 }
+   - Expect { ok: true, steps, artifact } and verify an artifact path.
+4. Audit Endpoints
+   - GET /api/audit/timeline → session, tasks, logs, verifySteps.
+   - POST /api/audit/report → { ok: true, artifact } (HTML report path).
+5. Research Provider (optional)
+   - If GOOGLE_API_KEY + GOOGLE_CSE_ID set: web.search tool results include Google CSE summaries.
+   - Otherwise falls back to Wikipedia summaries.
+

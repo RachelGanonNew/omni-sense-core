@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOmniContext } from "@/lib/omnisenseStore";
 import { allowRequest, coerceInsight, scoreConfidence } from "@/lib/validate";
-import { agentAddEvent } from "@/lib/agentStore";
+import { agentAddEvent, agentGet } from "@/lib/agentStore";
 import { addPersonSeen } from "@/lib/memoryStore";
 
 export async function POST(req: NextRequest) {
@@ -36,6 +36,15 @@ export async function POST(req: NextRequest) {
     } = body || {};
 
     const { systemInstruction, preferences, historySnippet } = getOmniContext();
+    const sess = agentGet();
+    const fp = sess?.stats?.falsePositives || 0;
+    const imp = sess?.stats?.improvements || 0;
+    let tuning = "";
+    if (fp - imp >= 3) {
+      tuning = "Be more conservative; only output recommendations when highly supported. Prefer observations over strong actions.";
+    } else if (imp - fp >= 3) {
+      tuning = "Be more proactive; suggest specific next actions where appropriate.";
+    }
     const system = overrideSystemInstruction || systemInstruction;
 
     // Privacy enforcement
@@ -61,6 +70,7 @@ Instructions:
 - Return ONLY a JSON object with keys: insight_type, observation, analysis, action_recommendation.
 - Keep it concise and actionable.
 - Avoid sensitive attribute inferences; do not mention biometrics or identity.
+${tuning ? `\nTuning: ${tuning}` : ""}
 `;
 
     // If privacy local mode, avoid cloud calls, return heuristic demo insight
@@ -81,7 +91,18 @@ Instructions:
       return NextResponse.json(local);
     }
 
-    const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+    // Simple retry/backoff for transient failures
+    const genOnce = async () => await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+    let resp: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        resp = await genOnce();
+        break;
+      } catch (e) {
+        if (attempt === 2) throw e;
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
     let text = resp.response.text().trim();
 
     // Try to extract JSON
