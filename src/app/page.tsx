@@ -59,6 +59,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [demoMode, setDemoMode] = useState<boolean>(false);
   const [appClosed, setAppClosed] = useState<boolean>(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const suggestionBeforeDemoRef = useRef<string>("");
   const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
@@ -177,6 +178,7 @@ export default function Home() {
     setConsented(false);
     setPaused(false);
     setDemoMode(false);
+    setMobileSidebarOpen(false);
     setAppClosed(true);
   }, [teardown]);
 
@@ -682,6 +684,146 @@ export default function Home() {
         </div>
       </aside>
 
+      {/* Mobile Sidebar Drawer */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-72 overflow-auto bg-white p-3 shadow-xl">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-semibold">OmniSense</div>
+              <button className="rounded-md border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50" onClick={() => setMobileSidebarOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
+                <span className="text-xs text-slate-700">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
+              </div>
+              <button
+                className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                onClick={async () => {
+                  setAppClosed(false);
+                  setConsented(true);
+                  setMobileSidebarOpen(false);
+                  await start();
+                }}
+              >
+                Start Camera
+              </button>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Settings</h3>
+              <div className="space-y-4 text-sm">
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-slate-700">Output</span>
+                  <select
+                    className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow"
+                    value={outputMode}
+                    onChange={async (e) => {
+                      const v = e.target.value as "text" | "voice";
+                      setOutputMode(v);
+                      try {
+                        await fetch("/api/omnisense/context", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ preferences: { outputMode: v } }),
+                        });
+                      } catch {}
+                    }}
+                  >
+                    <option value="text" className="text-gray-800">Text</option>
+                    <option value="voice" className="text-gray-800">Voice</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-slate-700">Conversational Voice</span>
+                  <input
+                    type="checkbox"
+                    checked={convMode}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setConvMode(v);
+                      if (v) {
+                        setUseStream(true);
+                        setOutputMode("voice");
+                      } else {
+                        setUseStream(false);
+                        setOutputMode("text");
+                      }
+                    }}
+                    disabled={privacyMode !== "cloud"}
+                    className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-slate-700">Privacy</span>
+                  <input
+                    type="checkbox"
+                    checked={privacyMode !== "off"}
+                    onChange={async (e) => {
+                      const v = e.target.checked ? "cloud" : "off";
+                      setPrivacyMode(v as any);
+                      try {
+                        await fetch("/api/omnisense/context", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ preferences: { privacyMode: v } }),
+                        });
+                      } catch {}
+                    }}
+                    className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-slate-700">Stream Mode</span>
+                  <span className="text-xs text-slate-500">Always on</span>
+                </label>
+
+                <button
+                  className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white ${
+                    glassesConnected ? "bg-emerald-600 hover:bg-emerald-500" : "bg-indigo-600 hover:bg-indigo-500"
+                  }`}
+                  onClick={() => {
+                    if (glassesConnected) setGlassesConnected(false);
+                    else setShowGlassesModal(true);
+                  }}
+                >
+                  {glassesConnected ? "Glasses Connected" : "Connect Glasses"}
+                </button>
+                <button className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={closeApp}>
+                  Close App
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <button className="w-full text-left text-sm font-semibold" onClick={() => setShowDemo((v) => !v)}>
+                {showDemo ? "▼" : "►"} Demo Mode
+              </button>
+              {showDemo && (
+                <div className="mt-3 space-y-3 text-sm">
+                  <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
+                  <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
+                  <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
+                    Check API Health
+                  </button>
+                  {showAuditLink && (
+                    <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
+                  )}
+                  {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={`transition-[padding-left] duration-200 md:pl-72 ${sidebarOpen ? "md:pl-72" : "md:pl-14"}`}>
 
       {/* Hero banner */}
@@ -703,6 +845,9 @@ export default function Home() {
 
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
+          <button className="mr-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm hover:bg-slate-50 md:hidden" onClick={() => setMobileSidebarOpen(true)}>
+            ≡
+          </button>
           <div className={`h-3 w-3 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-zinc-400"}`} />
           <span className="text-sm">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
         </div>
