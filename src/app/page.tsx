@@ -58,6 +58,7 @@ export default function Home() {
   const coachLastRef = useRef<number>(0);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [demoMode, setDemoMode] = useState<boolean>(false);
+  const [appClosed, setAppClosed] = useState<boolean>(false);
   const suggestionBeforeDemoRef = useRef<string>("");
   const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
@@ -170,6 +171,14 @@ export default function Home() {
     stopAudio();
     stopStream();
   }, [stopAudio, stopStream]);
+
+  const closeApp = useCallback(() => {
+    try { teardown(); } catch {}
+    setConsented(false);
+    setPaused(false);
+    setDemoMode(false);
+    setAppClosed(true);
+  }, [teardown]);
 
   // Demo Mode: scripted showcase without requiring camera/mic
   useEffect(() => {
@@ -538,6 +547,25 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-200 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+      {appClosed && (
+        <div className="mx-auto flex min-h-screen w-full max-w-2xl items-center justify-center px-6 py-10">
+          <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold">App closed</h2>
+            <p className="mt-1 text-sm text-slate-600">Camera, microphone, and background processing have been stopped.</p>
+            <div className="mt-4 flex items-center gap-3">
+              <button className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white" onClick={() => setAppClosed(false)}>
+                Re-open
+              </button>
+              <button className="rounded-md border border-slate-300 px-4 py-2 text-sm" onClick={() => setSidebarOpen(true)}>
+                Show settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!appClosed && (
+        <>
       {!consented && !demoMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 text-black shadow-xl dark:bg-zinc-900 dark:text-zinc-50">
@@ -558,7 +586,7 @@ export default function Home() {
               </button>
               <button
                 className="rounded-md border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-                onClick={() => { try { teardown(); } catch {}; setConsented(false); }}
+                onClick={closeApp}
               >
                 Not now
               </button>
@@ -566,6 +594,95 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed left-0 top-0 z-40 hidden h-screen border-r border-slate-200 bg-white/90 backdrop-blur md:block ${sidebarOpen ? "w-72" : "w-14"}`}
+      >
+        <div className="flex h-full flex-col p-2">
+          <button
+            className="mb-2 flex h-10 w-full items-center justify-center rounded-md border border-slate-200 bg-white text-sm hover:bg-slate-50"
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? "Collapse" : "Expand"}
+          >
+            ≡
+          </button>
+
+          {sidebarOpen && (
+            <>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
+                  <span className="text-xs text-slate-700">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
+                </div>
+                <button className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500" onClick={async ()=>{ setAppClosed(false); setConsented(true); await start(); }}>Start Camera</button>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">Settings</h3>
+                <div className="space-y-4 text-sm">
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Output</span>
+                    <select className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
+                      <option value="text" className="text-gray-800">Text</option>
+                      <option value="voice" className="text-gray-800">Voice</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Conversational Voice</span>
+                    <input type="checkbox" checked={convMode} onChange={(e)=>{ const v=e.target.checked; setConvMode(v); if (v){ setUseStream(true); setOutputMode("voice"); } else { setUseStream(false); setOutputMode("text"); } }} disabled={privacyMode!=="cloud"} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Privacy</span>
+                    <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Stream Mode</span>
+                    <span className="text-xs text-slate-500">Always on</span>
+                  </label>
+                  <button className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white ${glassesConnected?"bg-emerald-600 hover:bg-emerald-500":"bg-indigo-600 hover:bg-indigo-500"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
+                  <button className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={closeApp}>Close App</button>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
+                  {showDemo ? "▼" : "►"} Demo Mode
+                </button>
+                {showDemo && (
+                  <div className="mt-3 space-y-3 text-sm">
+                    <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
+                    <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
+                    <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
+                      Check API Health
+                    </button>
+                    {showAuditLink && (
+                      <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
+                    )}
+                    {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
+                  </div>
+                )}
+              </div>
+
+              {showDetectionsSidebar && detections.length>0 && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <h3 className="mb-2 text-sm font-semibold">Recent Detections</h3>
+                  <div className="flex flex-col gap-1 text-xs">
+                    {detections.slice(0,5).map((d,i)=> (
+                      <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded border border-slate-200 px-2 py-1">
+                        <span className="truncate"><span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px]">{d.kind}</span>{d.info||""}</span>
+                        <span className="text-slate-500">{new Date(d.t).toLocaleTimeString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </aside>
+
+      <div className={`transition-[padding-left] duration-200 md:pl-72 ${sidebarOpen ? "md:pl-72" : "md:pl-14"}`}>
 
       {/* Hero banner */}
       <div className="mx-auto w-full max-w-6xl px-6 pt-6">
@@ -576,10 +693,7 @@ export default function Home() {
               <p className="mt-1 text-sm text-fuchsia-50/90">AI-Powered Social Insight Analysis</p>
             </div>
             <div className="flex items-center gap-3">
-              <button className="rounded-md border border-white/30 bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20" onClick={()=>setSidebarOpen(v=>!v)}>
-                {sidebarOpen ? "Hide settings" : "Show settings"}
-              </button>
-              <button className={`rounded-md px-3 py-2 text-sm font-medium text-white ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/20 hover:bg-white/30"}`} onClick={()=>setDemoMode(v=>!v)}>
+              <button className={`rounded-md px-3 py-2 text-sm font-medium text-white ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/20 hover:bg-white/30"}`} onClick={()=>{ setAppClosed(false); setDemoMode(v=>!v); }}>
                 {demoMode ? "Demo: ON" : "Demo"}
               </button>
             </div>
@@ -686,76 +800,6 @@ export default function Home() {
             intensityPct={intensityPct}
           />
         </div>
-
-        {/* Sidebar */}
-        <aside className={`md:col-span-3 hidden ${sidebarOpen ? "md:block" : "md:hidden"}`}>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <div className="mb-3 flex items-center gap-2">
-              <div className={`h-2.5 w-2.5 rounded-full ${consented && !paused ? "bg-emerald-400" : "bg-slate-500"}`} />
-              <span className="text-xs">AI Assist {consented && !paused ? "ON" : "OFF"}</span>
-            </div>
-            <button className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500" onClick={async ()=>{ setConsented(true); await start(); }}>Start Camera</button>
-          </div>
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">Settings</h3>
-            <div className="space-y-4 text-sm">
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-slate-300">Output</span>
-                <select className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 px-3 py-1.5 text-xs text-white shadow" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
-                  <option value="text" className="text-gray-800">Text</option>
-                  <option value="voice" className="text-gray-800">Voice</option>
-                </select>
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-slate-300">Conversational Voice</span>
-                <input type="checkbox" checked={convMode} onChange={(e)=>{ const v=e.target.checked; setConvMode(v); if (v){ setUseStream(true); setOutputMode("voice"); } else { setUseStream(false); setOutputMode("text"); } }} disabled={privacyMode!=="cloud"} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-slate-300">Privacy</span>
-                <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-purple-400 bg-gradient-to-br from-blue-500 to-purple-600" />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-slate-300">Stream Mode</span>
-                {/* Stream Mode forced ON; toggle removed */}
-                <span className="text-xs text-slate-400">Always on</span>
-              </label>
-              <button className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white ${glassesConnected?"bg-emerald-600 hover:bg-emerald-500":"bg-indigo-600 hover:bg-indigo-500"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
-              <button className="w-full rounded-md border border-white/20 px-3 py-1.5 text-xs hover:bg-white/60" onClick={()=>{ try { teardown(); } catch {}; setConsented(false); }}>Close App</button>
-            </div>
-          </div>
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
-              {showDemo ? "▼" : "►"} Demo Mode
-            </button>
-            {showDemo && (
-              <div className="mt-3 space-y-3 text-sm">
-                <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
-                {/* Stream Mode is always ON */}
-                <button className="w-full rounded-md border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
-                  Check API Health
-                </button>
-                {showAuditLink && (
-                  <a className="block rounded-md border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10" href="/audit">Open Verification/Audit</a>
-                )}
-                {healthMsg && <div className="text-xs text-slate-400">{healthMsg}</div>}
-              </div>
-            )}
-          </div>
-          {showDetectionsSidebar && detections.length>0 && (
-            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-              <h3 className="mb-2 text-sm font-semibold">Recent Detections</h3>
-              <div className="flex flex-col gap-1 text-xs">
-                {detections.slice(0,5).map((d,i)=> (
-                  <div key={`${d.t}-${i}`} className="flex items-center justify-between rounded border border-white/10 px-2 py-1">
-                    <span className="truncate"><span className="mr-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{d.kind}</span>{d.info||""}</span>
-                    <span className="text-slate-400">{new Date(d.t).toLocaleTimeString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </aside>
 
         {showGlassesModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -930,6 +974,9 @@ export default function Home() {
         </section>
 
       </main>
+      </div>
+        </>
+      )}
     </div>
   );
 }
