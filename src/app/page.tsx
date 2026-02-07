@@ -1030,9 +1030,23 @@ export default function Home() {
               onChange={(e) => {
                 lastRunGoalEditRef.current = Date.now();
                 setAutoRunGoal(false);
-                setRunGoal(e.target.value);
+                const next = e.target.value;
+                setRunGoal(next);
+                if (!next.trim()) setRunResult("");
               }}
             />
+            {!!runGoal.trim() && (
+              <button
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
+                onClick={() => {
+                  setRunGoal("");
+                  setRunResult("");
+                  setAutoRunGoal(false);
+                }}
+              >
+                Clear
+              </button>
+            )}
             {!autoRunGoal && (
               <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoRunGoal(true)}>
                 Resume auto
@@ -1059,8 +1073,8 @@ export default function Home() {
                     const msg = String(json?.detail || json?.error || res.statusText || "failed");
                     throw new Error(`${msg} (HTTP ${res.status})`);
                   }
-                  const artifactNote = json?.artifactWriteError ? ` (artifact: ${json.artifactWriteError})` : "";
-                  setRunResult(`ok: steps=${json.steps}, artifact=${json.artifact || "-"}${artifactNote}`);
+                  const final = json?.final ? String(json.final) : "";
+                  setRunResult(final || `ok: steps=${json.steps}`);
                 } catch (e: any) {
                   setRunResult(`error: ${e?.message || String(e)}`);
                 }
@@ -1069,7 +1083,7 @@ export default function Home() {
               Run
             </button>
           </div>
-          {runResult && <div className="text-xs text-slate-500">{runResult}</div>}
+          {runResult && <div className="whitespace-pre-line text-xs text-slate-500">{runResult}</div>}
         </section>
 
         {/* Verification/Audit removed from Home (kept for Demo Mode link elsewhere) */}

@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { assembleLongContext } from "@/lib/context";
 import { runAgentStep } from "@/lib/agent";
 import { agentAddEvent } from "@/lib/agentStore";
@@ -17,6 +15,7 @@ export async function POST(req: NextRequest) {
 
     const started = Date.now();
     const trace: any[] = [];
+    let final: string | null = null;
 
     for (let i = 0; i < steps; i++) {
       const longCtx = assembleLongContext();
@@ -25,25 +24,18 @@ export async function POST(req: NextRequest) {
       trace.push({ i, out });
       agentAddEvent("system", { kind: "agent.run_step", index: i, tools: out.toolCalls.length });
       // Early stop if model provided a final
-      if (out.final && out.final.length > 0) break;
+      if (out.final && out.final.length > 0) {
+        final = String(out.final);
+        break;
+      }
     }
 
-    // Write verification artifact for the run
-    // Note: Vercel's filesystem is read-only except for /tmp.
-    const cwd = process.cwd();
-    const baseDir = process.env.VERCEL || cwd.startsWith("/var/task") ? "/tmp" : cwd;
-    const dir = path.join(baseDir, ".data", "verify");
-    const file = path.join(dir, `run_${Date.now()}.json`);
-    let artifactWriteError: string | null = null;
-    try {
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(file, JSON.stringify({ goal, steps, maxTools, started, ended: Date.now(), trace }, null, 2));
-    } catch (err: any) {
-      artifactWriteError = String(err?.message || err);
-      agentAddEvent("system", { kind: "agent.run_artifact_write_failed", error: artifactWriteError });
+    if (!final) {
+      const last = trace[trace.length - 1]?.out?.final;
+      final = last ? String(last) : null;
     }
 
-    return NextResponse.json({ ok: true, goal, steps: trace.length, artifact: artifactWriteError ? null : file, artifactWriteError });
+    return NextResponse.json({ ok: true, goal, steps: trace.length, final, ms: Date.now() - started });
   } catch (e: any) {
     const detail = String(e?.message || e);
     agentAddEvent("system", { kind: "agent.run_failed", error: detail });
