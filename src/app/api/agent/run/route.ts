@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
 
     // Write verification artifact for the run
     // Note: Vercel's filesystem is read-only except for /tmp.
-    const baseDir = process.env.VERCEL ? "/tmp" : process.cwd();
+    const cwd = process.cwd();
+    const baseDir = process.env.VERCEL || cwd.startsWith("/var/task") ? "/tmp" : cwd;
     const dir = path.join(baseDir, ".data", "verify");
     const file = path.join(dir, `run_${Date.now()}.json`);
     let artifactWriteError: string | null = null;
