@@ -13,12 +13,18 @@ export type Task = {
 
 type Data = { tasks: Task[] };
 
-const DATA_DIR = path.join(process.cwd(), ".data");
+const cwd = process.cwd();
+const baseDir = process.env.VERCEL || cwd.startsWith("/var/task") ? "/tmp" : cwd;
+const DATA_DIR = path.join(baseDir, ".data");
 const FILE = path.join(DATA_DIR, "tasks.json");
 
 function ensure() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(FILE)) fs.writeFileSync(FILE, JSON.stringify({ tasks: [] }, null, 2));
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (!fs.existsSync(FILE)) fs.writeFileSync(FILE, JSON.stringify({ tasks: [] }, null, 2));
+  } catch {
+    // In serverless/read-only environments, fall back to empty tasks.
+  }
 }
 
 function load(): Data {
