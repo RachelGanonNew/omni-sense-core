@@ -1049,9 +1049,18 @@ export default function Home() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ goal: runGoal.trim(), steps: 3, maxToolsPerStep: 2 }),
                   });
-                  const json = await res.json();
-                  if (!res.ok) throw new Error(json?.error || "failed");
-                  setRunResult(`ok: steps=${json.steps}, artifact=${json.artifact}`);
+                  let json: any = null;
+                  try {
+                    json = await res.json();
+                  } catch {
+                    json = null;
+                  }
+                  if (!res.ok) {
+                    const msg = String(json?.detail || json?.error || res.statusText || "failed");
+                    throw new Error(`${msg} (HTTP ${res.status})`);
+                  }
+                  const artifactNote = json?.artifactWriteError ? ` (artifact: ${json.artifactWriteError})` : "";
+                  setRunResult(`ok: steps=${json.steps}, artifact=${json.artifact || "-"}${artifactNote}`);
                 } catch (e: any) {
                   setRunResult(`error: ${e?.message || String(e)}`);
                 }

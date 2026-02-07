@@ -29,13 +29,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Write verification artifact for the run
-    const dir = path.join(process.cwd(), ".data", "verify");
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    // Note: Vercel's filesystem is read-only except for /tmp.
+    const baseDir = process.env.VERCEL ? "/tmp" : process.cwd();
+    const dir = path.join(baseDir, ".data", "verify");
     const file = path.join(dir, `run_${Date.now()}.json`);
-    fs.writeFileSync(file, JSON.stringify({ goal, steps, maxTools, started, ended: Date.now(), trace }, null, 2));
+    let artifactWriteError: string | null = null;
+    try {
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ goal, steps, maxTools, started, ended: Date.now(), trace }, null, 2));
+    } catch (err: any) {
+      artifactWriteError = String(err?.message || err);
+      agentAddEvent("system", { kind: "agent.run_artifact_write_failed", error: artifactWriteError });
+    }
 
-    return NextResponse.json({ ok: true, goal, steps: trace.length, artifact: file });
-  } catch (e) {
-    return NextResponse.json({ error: "failed" }, { status: 500 });
+    return NextResponse.json({ ok: true, goal, steps: trace.length, artifact: artifactWriteError ? null : file, artifactWriteError });
+  } catch (e: any) {
+    const detail = String(e?.message || e);
+    agentAddEvent("system", { kind: "agent.run_failed", error: detail });
+    return NextResponse.json({ error: "failed", detail }, { status: 500 });
   }
 }
