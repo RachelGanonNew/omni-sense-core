@@ -5,7 +5,9 @@ export default function UploadAnalyzePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [frameCount, setFrameCount] = useState<number>(8);
-  const [notes, setNotes] = useState<string>("");
+  const defaultNotes = "Paste transcript or notes here to include in analysis...";
+  const [notes, setNotes] = useState<string>(defaultNotes);
+  const [notesIsDraft, setNotesIsDraft] = useState<boolean>(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<string>("");
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -51,7 +53,7 @@ export default function UploadAnalyzePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           frames: frames.map((d) => ({ dataUrl: d })),
-          transcript: notes.slice(0, 800),
+          transcript: (notesIsDraft ? "" : notes).slice(0, 800),
         }),
       });
       const j = await res.json();
@@ -135,10 +137,21 @@ export default function UploadAnalyzePage() {
         <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h3 className="mb-2 text-lg font-semibold">Context (Optional Transcript)</h3>
           <textarea
-            className="h-48 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
-            placeholder="Paste transcript or notes here to include in analysis..."
+            className={`h-48 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 ${
+              notesIsDraft ? "text-zinc-400" : "text-zinc-900 dark:text-zinc-50"
+            }`}
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onFocus={(e) => {
+              if (notesIsDraft) {
+                try {
+                  (e.target as HTMLTextAreaElement).select();
+                } catch {}
+              }
+            }}
+            onChange={(e) => {
+              if (notesIsDraft) setNotesIsDraft(false);
+              setNotes(e.target.value);
+            }}
           />
         </section>
 

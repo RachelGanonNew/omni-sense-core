@@ -19,6 +19,7 @@ export default function Home() {
     "Stay concise. Invite others to weigh in. Clarify owners and dates."
   );
   const [notes, setNotes] = useState("");
+  const [notesIsDraft, setNotesIsDraft] = useState(false);
   const [summary, setSummary] = useState<string>("");
   const [actions, setActions] = useState<Array<any>>([]);
   const [extracting, setExtracting] = useState(false);
@@ -46,6 +47,7 @@ export default function Home() {
   const lastEmitRef = useRef<Record<string, number>>({});
   const [detections, setDetections] = useState<{ t: number; kind: string; info?: string }[]>([]);
   const [runGoal, setRunGoal] = useState("");
+  const [runGoalIsDraft, setRunGoalIsDraft] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
   const [runStatus, setRunStatus] = useState<string>("");
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
@@ -250,8 +252,14 @@ export default function Home() {
 
         if (cancelled) return;
 
-        if (autoRunGoal) setRunGoal(goalDraft);
-        if (autoNotes) setNotes(notesDraft);
+        if (autoRunGoal) {
+          setRunGoal(goalDraft);
+          setRunGoalIsDraft(true);
+        }
+        if (autoNotes) {
+          setNotes(notesDraft);
+          setNotesIsDraft(true);
+        }
       } catch {}
     };
 
@@ -1030,24 +1038,41 @@ export default function Home() {
               <h3 className="text-lg font-semibold text-slate-900">Planner</h3>
               <div className="mt-1 text-xs text-slate-500">Draft a goal and execute when you’re ready.</div>
             </div>
-            <div className={`${pillBase} ${autoRunGoal ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
-              <span>{autoRunGoal ? "Auto" : "Manual"}</span>
+            <div className="flex items-center gap-2">
+              {runStartedAt != null && (
+                <div className={`${pillBase} border-indigo-200 bg-indigo-50 text-indigo-800`}>
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+                  <span>Working</span>
+                </div>
+              )}
+              <div className={`${pillBase} ${autoRunGoal ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
+                <span>{autoRunGoal ? "Auto" : "Manual"}</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
+              className={`flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-300 ${runGoalIsDraft ? "text-slate-400" : "text-slate-900"}`}
               placeholder="Goal (e.g., Prepare follow-up plan for the meeting)"
               value={runGoal}
+              onFocus={(e) => {
+                if (runGoalIsDraft) {
+                  try {
+                    (e.target as HTMLInputElement).select();
+                  } catch {}
+                }
+              }}
               onChange={(e) => {
                 lastRunGoalEditRef.current = Date.now();
                 setAutoRunGoal(false);
                 const next = e.target.value;
+                if (runGoalIsDraft) setRunGoalIsDraft(false);
                 setRunGoal(next);
                 if (!next.trim()) {
                   setRunResult("");
                   setRunStatus("");
                   setRunStartedAt(null);
+                  setRunGoalIsDraft(false);
                 }
               }}
             />
@@ -1058,7 +1083,7 @@ export default function Home() {
             )}
             <button
               className={primaryBtn}
-              disabled={!runGoal.trim()}
+              disabled={!runGoal.trim() || runStartedAt != null}
               onClick={async () => {
                 const goal = runGoal.trim();
                 if (!goal) return;
@@ -1067,6 +1092,7 @@ export default function Home() {
                 setRunResult("");
                 setRunStatus("Running...");
                 setRunStartedAt(Date.now());
+                setRunGoalIsDraft(false);
                 try {
                   const res = await fetch("/api/agent/run", {
                     method: "POST",
@@ -1084,7 +1110,12 @@ export default function Home() {
                     throw new Error(`${msg} (HTTP ${res.status})`);
                   }
                   const final = json?.final ? String(json.final) : "";
-                  setRunResult(final || `ok: steps=${json.steps}`);
+                  const finalTrim = final.trim();
+                  if (!finalTrim) {
+                    setRunResult("No output returned. Try rephrasing your goal (be specific about the desired format and next steps).");
+                  } else {
+                    setRunResult(finalTrim);
+                  }
                   setRunStatus("");
                   setRunStartedAt(null);
                 } catch (e: any) {
@@ -1114,12 +1145,20 @@ export default function Home() {
             </div>
           </div>
           <textarea
-            className="w-full min-h-32 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
+            className={`w-full min-h-32 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm outline-none focus:border-slate-300 ${notesIsDraft ? "text-slate-400" : "text-slate-900"}`}
             placeholder="Paste brief meeting notes (or type key commitments)..."
             value={notes}
+            onFocus={(e) => {
+              if (notesIsDraft) {
+                try {
+                  (e.target as HTMLTextAreaElement).select();
+                } catch {}
+              }
+            }}
             onChange={(e) => {
               lastNotesEditRef.current = Date.now();
               setAutoNotes(false);
+              if (notesIsDraft) setNotesIsDraft(false);
               setNotes(e.target.value);
             }}
           />
