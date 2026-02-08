@@ -176,7 +176,8 @@ export async function buildLongMemorySnippet(opts: {
   const lines = items
     .slice(0, limit)
     .map((e) => {
-      const t = new Date(e.t).toISOString();
+      const d = new Date(typeof e.t === "number" && e.t > 0 ? e.t : Date.now());
+      const t = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
       const inTxt = e.input ? truncateText(JSON.stringify(e.input), 500) : "";
       const outTxt = e.output ? truncateText(JSON.stringify(e.output), 500) : "";
       return `- ${t} ${e.kind} in=${inTxt} out=${outTxt}`;

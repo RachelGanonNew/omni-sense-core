@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
       // Group interactions by day
       const byDay: Record<string, { count: number; kinds: Record<string, number>; first: number; last: number }> = {};
       for (const ev of interactions) {
-        const day = new Date(ev.t).toISOString().slice(0, 10);
+        const d = new Date(typeof ev.t === "number" && ev.t > 0 ? ev.t : Date.now());
+        const day = (isNaN(d.getTime()) ? new Date() : d).toISOString().slice(0, 10);
         if (!byDay[day]) byDay[day] = { count: 0, kinds: {}, first: ev.t, last: ev.t };
         byDay[day].count++;
         byDay[day].kinds[ev.kind] = (byDay[day].kinds[ev.kind] || 0) + 1;
@@ -122,8 +123,8 @@ Return ONLY JSON with these keys:
         blocked: tasks.filter((t) => t.status === "blocked").length,
       },
       feedback: stats,
-      oldestInteraction: interactions.length ? new Date(interactions[interactions.length - 1].t).toISOString() : null,
-      newestInteraction: interactions.length ? new Date(interactions[0].t).toISOString() : null,
+      oldestInteraction: interactions.length ? new Date(typeof interactions[interactions.length - 1].t === "number" ? interactions[interactions.length - 1].t : Date.now()).toISOString() : null,
+      newestInteraction: interactions.length ? new Date(typeof interactions[0].t === "number" ? interactions[0].t : Date.now()).toISOString() : null,
     });
   } catch (e: any) {
     return NextResponse.json({ error: "failed", detail: String(e?.message || e) }, { status: 500 });
