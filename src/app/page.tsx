@@ -71,6 +71,13 @@ export default function Home() {
   const [showDetectionsSidebar, setShowDetectionsSidebar] = useState<boolean>(true);
   const [showAuditLink, setShowAuditLink] = useState<boolean>(true);
   const [healthMsg, setHealthMsg] = useState<string>("");
+  const [autonomousMode, setAutonomousMode] = useState<boolean>(false);
+  const [actionQueue, setActionQueue] = useState<any[]>([]);
+  const [actionQueueLoading, setActionQueueLoading] = useState<boolean>(false);
+  const [actionQueueMsg, setActionQueueMsg] = useState<string>("");
+  const [showActionQueue, setShowActionQueue] = useState<boolean>(false);
+  const [continuityData, setContinuityData] = useState<any>(null);
+  const [showContinuity, setShowContinuity] = useState<boolean>(false);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -610,6 +617,70 @@ export default function Home() {
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encode(title)}${datesParam}`;
   };
 
+  const generateAutonomousActions = async () => {
+    try {
+      setActionQueueLoading(true);
+      setActionQueueMsg("Analyzing meeting context...");
+      const res = await fetch("/api/omnisense/autonomous-execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notes: notes.slice(0, 2000),
+          meetingSummary: summary || suggestion,
+          executeMode: false,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "failed");
+      setActionQueue(j.actions || []);
+      setActionQueueMsg(`${(j.actions || []).length} actions proposed`);
+      setShowActionQueue(true);
+    } catch (e: any) {
+      setActionQueueMsg(`Error: ${e?.message || String(e)}`);
+    } finally {
+      setActionQueueLoading(false);
+    }
+  };
+
+  const executeAction = async (actionId: string) => {
+    setActionQueue((prev) =>
+      prev.map((a) => (a.id === actionId ? { ...a, status: "executed", executedAt: Date.now() } : a))
+    );
+  };
+
+  const approveAllActions = async () => {
+    setActionQueue((prev) =>
+      prev.map((a) => a.status === "proposed" && a.confidence >= 0.7 ? { ...a, status: "executed", executedAt: Date.now() } : a)
+    );
+    setActionQueueMsg("High-confidence actions approved");
+  };
+
+  const rateAction = async (actionId: string, rating: "up" | "down", correction?: string) => {
+    try {
+      const action = actionQueue.find((a) => a.id === actionId);
+      await fetch("/api/omnisense/verify-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actionId, actionType: action?.type || "unknown", rating, correction }),
+      });
+      setActionQueue((prev) =>
+        prev.map((a) => (a.id === actionId ? { ...a, userRating: rating } : a))
+      );
+    } catch {}
+  };
+
+  const loadContinuity = async (mode: string = "review") => {
+    try {
+      setContinuityData(null);
+      setShowContinuity(true);
+      const res = await fetch(`/api/omnisense/continuity?mode=${mode}`);
+      const j = await res.json();
+      setContinuityData(j);
+    } catch {
+      setContinuityData({ error: "Failed to load continuity data" });
+    }
+  };
+
   const extractActions = async () => {
     try {
       setExtracting(true);
@@ -871,6 +942,12 @@ export default function Home() {
                 <span className={`h-2 w-2 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/60"}`} />
                 <span>{consented && !paused ? "AI Assist ON" : "AI Assist OFF"}</span>
               </div>
+              <button className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${autonomousMode ? "bg-amber-500 hover:bg-amber-400" : "bg-white/15 hover:bg-white/25"}`} onClick={()=>setAutonomousMode(v=>!v)}>
+                {autonomousMode ? "Autonomous: ON" : "Autonomous"}
+              </button>
+              {autonomousMode && actionQueue.filter(a=>a.status==="proposed").length > 0 && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">{actionQueue.filter(a=>a.status==="proposed").length}</span>
+              )}
               <button className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/15 hover:bg-white/25"}`} onClick={()=>{ setAppClosed(false); setDemoMode(v=>!v); }}>
                 {demoMode ? "Demo: ON" : "Demo"}
               </button>
@@ -1131,6 +1208,179 @@ export default function Home() {
           {runStatus && <div className="text-xs text-slate-500">{runStatus} (elapsed {runElapsedSec}s, ETA ~10–30s)</div>}
           {runResult && <div className="whitespace-pre-line text-xs text-slate-500">{runResult}</div>}
         </section>
+
+        {/* Autonomous Action Queue */}
+        {autonomousMode && (
+          <section className={`md:col-span-12 ${cardBase}`}>
+            <div className={cardTitleRow}>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Action Queue</h3>
+                <div className="mt-1 text-xs text-slate-500">AI-proposed actions from meeting analysis. Review, approve, or rate.</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className={secondaryBtn} onClick={generateAutonomousActions} disabled={actionQueueLoading}>
+                  {actionQueueLoading ? "Analyzing..." : "Generate Actions"}
+                </button>
+                {actionQueue.filter(a => a.status === "proposed").length > 0 && (
+                  <button className={primaryBtn} onClick={approveAllActions}>Approve All</button>
+                )}
+                <button className={`${secondaryBtn} text-xs`} onClick={() => loadContinuity("review")}>
+                  Session Review
+                </button>
+              </div>
+            </div>
+            {actionQueueMsg && <div className="mb-3 text-xs text-slate-500">{actionQueueMsg}</div>}
+            {actionQueue.length > 0 && (
+              <div className="space-y-2">
+                {actionQueue.map((action) => (
+                  <div key={action.id} className={`rounded-xl border p-4 text-sm shadow-sm ${action.status === "executed" ? "border-emerald-200 bg-emerald-50/50" : action.status === "failed" ? "border-red-200 bg-red-50/50" : "border-slate-200 bg-white"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            action.type === "calendar" ? "bg-blue-100 text-blue-700" :
+                            action.type === "email" ? "bg-purple-100 text-purple-700" :
+                            action.type === "task" ? "bg-amber-100 text-amber-700" :
+                            action.type === "document" ? "bg-slate-100 text-slate-700" :
+                            "bg-emerald-100 text-emerald-700"
+                          }`}>{action.type}</span>
+                          <span className="font-medium text-slate-900">{action.title}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-slate-600">{action.description}</div>
+                        <div className="mt-2 flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-500">Confidence:</span>
+                            <div className="h-1.5 w-16 rounded-full bg-slate-200">
+                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${action.confidence * 100}%` }} />
+                            </div>
+                            <span className="font-medium">{(action.confidence * 100).toFixed(0)}%</span>
+                          </div>
+                          {action.status === "executed" && <span className="font-medium text-emerald-700">Executed</span>}
+                          {action.status === "failed" && <span className="font-medium text-red-700">Failed: {action.error}</span>}
+                        </div>
+                        {action.type === "email" && action.data?.body && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Preview email</summary>
+                            <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                              <div className="font-medium">To: {action.data.to}</div>
+                              <div className="font-medium">Subject: {action.data.subject}</div>
+                              <div className="mt-2 whitespace-pre-line text-slate-700">{action.data.body}</div>
+                            </div>
+                          </details>
+                        )}
+                        {action.type === "document" && action.data?.sections && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Preview document</summary>
+                            <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                              {action.data.sections.map((s: any, si: number) => (
+                                <div key={si} className="mb-2">
+                                  <div className="font-semibold">{s.heading}</div>
+                                  <ul className="ml-4 list-disc">{(s.items || []).map((item: string, ii: number) => <li key={ii}>{item}</li>)}</ul>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        {action.status === "proposed" && (
+                          <>
+                            <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500" onClick={() => executeAction(action.id)}>
+                              Execute
+                            </button>
+                            {action.type === "calendar" && action.data?.date && (
+                              <a className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
+                                Open Calendar
+                              </a>
+                            )}
+                          </>
+                        )}
+                        {action.status === "executed" && !action.userRating && (
+                          <div className="flex items-center gap-1">
+                            <button className="rounded border border-slate-200 px-1.5 py-0.5 text-xs hover:bg-emerald-50" onClick={() => rateAction(action.id, "up")} title="Correct">👍</button>
+                            <button className="rounded border border-slate-200 px-1.5 py-0.5 text-xs hover:bg-red-50" onClick={() => rateAction(action.id, "down")} title="Incorrect">👎</button>
+                          </div>
+                        )}
+                        {action.userRating && (
+                          <span className={`text-xs font-medium ${action.userRating === "up" ? "text-emerald-600" : "text-red-600"}`}>
+                            {action.userRating === "up" ? "Verified ✓" : "Corrected"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Continuity / Session Review Panel */}
+        {showContinuity && (
+          <section className={`md:col-span-12 ${cardBase}`}>
+            <div className={cardTitleRow}>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Session Continuity</h3>
+                <div className="mt-1 text-xs text-slate-500">Cross-session tracking, patterns, and proactive reminders.</div>
+              </div>
+              <button className={secondaryBtn} onClick={() => setShowContinuity(false)}>Close</button>
+            </div>
+            {!continuityData && <div className="text-xs text-slate-500">Loading...</div>}
+            {continuityData?.error && <div className="text-xs text-red-600">{continuityData.error}</div>}
+            {continuityData && !continuityData.error && (
+              <div className="space-y-4 text-sm">
+                {continuityData.summary && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                    <div className="mb-1 text-xs font-semibold text-slate-700">Summary</div>
+                    <div className="text-slate-800">{continuityData.summary}</div>
+                  </div>
+                )}
+                {continuityData.goalProgress && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                    <div className="mb-1 text-xs font-semibold text-slate-700">Goal Progress</div>
+                    <div className="text-slate-800">{continuityData.goalProgress}</div>
+                  </div>
+                )}
+                {Array.isArray(continuityData.patterns) && continuityData.patterns.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+                    <div className="mb-1 text-xs font-semibold text-amber-800">Recurring Patterns</div>
+                    <ul className="ml-4 list-disc text-xs text-amber-900">{continuityData.patterns.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul>
+                  </div>
+                )}
+                {Array.isArray(continuityData.reminders) && continuityData.reminders.length > 0 && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                    <div className="mb-1 text-xs font-semibold text-blue-800">Proactive Reminders</div>
+                    <ul className="ml-4 list-disc text-xs text-blue-900">{continuityData.reminders.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul>
+                  </div>
+                )}
+                {Array.isArray(continuityData.recommendations) && continuityData.recommendations.length > 0 && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                    <div className="mb-1 text-xs font-semibold text-emerald-800">Recommendations</div>
+                    <ul className="ml-4 list-disc text-xs text-emerald-900">{continuityData.recommendations.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul>
+                  </div>
+                )}
+                {continuityData.feedback && (
+                  <div className="flex items-center gap-4 text-xs text-slate-600">
+                    <span>Feedback: {continuityData.feedback.total} ratings</span>
+                    <span>Accuracy: {(continuityData.feedback.accuracy * 100).toFixed(0)}%</span>
+                    <span>👍 {continuityData.feedback.up} / 👎 {continuityData.feedback.down}</span>
+                  </div>
+                )}
+                {Array.isArray(continuityData.pendingTasks) && continuityData.pendingTasks.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="mb-2 text-xs font-semibold text-slate-700">Pending Tasks</div>
+                    <div className="space-y-1">{continuityData.pendingTasks.map((t: any) => (
+                      <div key={t.id} className="flex items-center justify-between rounded border border-slate-100 px-2 py-1 text-xs">
+                        <span>{t.title}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${t.status === "in_progress" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{t.status}</span>
+                      </div>
+                    ))}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Verification/Audit removed from Home (kept for Demo Mode link elsewhere) */}
 
