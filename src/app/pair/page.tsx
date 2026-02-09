@@ -19,6 +19,8 @@ export default function PairPage() {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [link, setLink] = useState<string>("");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -99,7 +101,8 @@ export default function PairPage() {
     const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
     pc.addEventListener("icecandidate", (e) => { const candStr = (e as any)?.candidate?.candidate as string | undefined; if (candStr) setIceInfo((s) => s || (candStr.includes(" typ relay") ? "relayed" : "non-relay")); });
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } }, audio: false });
+    streamRef.current = stream;
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = stream;
       localVideoRef.current.muted = true;
@@ -154,7 +157,42 @@ export default function PairPage() {
       ) : (
         <div className="mb-4">
           <div className="mb-2 text-sm">Open this page from your phone via QR, then tap Start Phone and allow camera.</div>
-          <button className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700" onClick={startPhone} disabled={!sid}>Start Phone</button>
+          <div className="mb-3 flex items-center gap-3">
+            <button className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700" onClick={startPhone} disabled={!sid}>Start Phone</button>
+            <button
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+              onClick={async () => {
+                const next = facingMode === "environment" ? "user" : "environment";
+                setFacingMode(next);
+                // If already streaming, switch camera live
+                if (streamRef.current) {
+                  streamRef.current.getTracks().forEach((t) => t.stop());
+                  try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: next } }, audio: false });
+                    streamRef.current = newStream;
+                    if (localVideoRef.current) {
+                      localVideoRef.current.srcObject = newStream;
+                      await localVideoRef.current.play().catch(() => {});
+                    }
+                    // Replace track in peer connection
+                    const pc = pcRef.current;
+                    if (pc) {
+                      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+                      if (sender && newStream.getVideoTracks()[0]) {
+                        await sender.replaceTrack(newStream.getVideoTracks()[0]);
+                      }
+                    }
+                    setStatus(`Switched to ${next === "user" ? "front" : "back"} camera`);
+                  } catch (e: any) {
+                    setStatus(`Camera switch failed: ${e?.message || e}`);
+                  }
+                }
+              }}
+            >
+              {facingMode === "environment" ? "\uD83D\uDD04 Switch to Front" : "\uD83D\uDD04 Switch to Back"}
+            </button>
+          </div>
+          <div className="mb-2 text-xs text-zinc-500">Camera: {facingMode === "environment" ? "Back (rear)" : "Front (selfie)"}</div>
           <div className="mt-3">
             <video ref={localVideoRef} className="h-56 w-full rounded bg-black object-contain" muted playsInline />
           </div>
