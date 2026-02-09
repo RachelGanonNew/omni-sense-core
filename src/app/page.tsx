@@ -70,7 +70,6 @@ export default function Home() {
   const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
   const [showDetectionsSidebar, setShowDetectionsSidebar] = useState<boolean>(true);
-  const [showAuditLink, setShowAuditLink] = useState<boolean>(true);
   const [healthMsg, setHealthMsg] = useState<string>("");
   const [autonomousMode, setAutonomousMode] = useState<boolean>(false);
   const [actionQueue, setActionQueue] = useState<any[]>([]);
@@ -988,7 +987,6 @@ export default function Home() {
                   {showDemo && (
                     <div className="mt-3 space-y-3 text-sm">
                       <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                      <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
                       <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                         Check API Health
                       </button>
@@ -1163,7 +1161,6 @@ export default function Home() {
                 {showDemo && (
                   <div className="mt-3 space-y-3 text-sm">
                     <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                    <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
                     <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                       Check API Health
                     </button>
