@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     const { systemInstruction, preferences, historySnippet } = getOmniContext();
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
 
      const url = new URL(req.url);
      const n = Math.max(1, Math.min(6, Number(url.searchParams.get("n") || 4)));

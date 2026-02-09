@@ -31,6 +31,7 @@ export default function Home() {
   const [analyzeConfidence, setAnalyzeConfidence] = useState<number | null>(null);
   const [outputMode, setOutputMode] = useState<"text" | "voice">("text");
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [showGlassesModal, setShowGlassesModal] = useState(false);
@@ -556,7 +557,7 @@ export default function Home() {
 
   const start = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: "user" } });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: cameraFacing } });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -806,6 +807,13 @@ export default function Home() {
                     </select>
                   </label>
                   <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Camera</span>
+                    <select className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm" value={cameraFacing} onChange={(e) => setCameraFacing(e.target.value as "user" | "environment")}>
+                      <option value="user">Front</option>
+                      <option value="environment">Back</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">Privacy</span>
                     <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-indigo-400 bg-gradient-to-br from-indigo-500 to-purple-600" />
                   </label>
@@ -972,23 +980,52 @@ export default function Home() {
       {/* Hero banner */}
       <div className="mx-auto w-full max-w-6xl px-6 pt-6">
         <div className="rounded-3xl border border-white/20 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">OmniSense</h1>
-              <p className="mt-1 text-sm text-fuchsia-50/90">Real-time social insight, coaching, and follow-ups.</p>
+              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
+                OmniSense — Live Social Translator
+              </h1>
+              <p className="mt-1 text-sm text-fuchsia-50/90">
+                Real-time coaching through mic, camera, and glasses, plus autonomous follow-ups.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className={`${pillBase} border-white/30 bg-white/15 text-white`}> 
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <div className={`${pillBase} border-white/30 bg-white/15 text-white`}>
                 <span className={`h-2 w-2 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/60"}`} />
                 <span>{consented && !paused ? "AI Assist ON" : "AI Assist OFF"}</span>
               </div>
-              <button className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${autonomousMode ? "bg-amber-500 hover:bg-amber-400" : "bg-white/15 hover:bg-white/25"}`} onClick={()=>setAutonomousMode(v=>!v)}>
+              <div className={`${pillBase} border-white/30 bg-white/10 text-white`}>
+                <span className={`h-2 w-2 rounded-full ${consented ? "bg-emerald-300" : "bg-rose-300"}`} />
+                <span>{consented ? "Camera & Mic Active" : "Camera & Mic Off"}</span>
+              </div>
+              <div className={`${pillBase} border-white/30 bg-white/10 text-white`}>
+                <span className={`h-2 w-2 rounded-full ${
+                  glassesConnected ? "bg-emerald-300" : "bg-white/60"
+                }`} />
+                <span>{glassesConnected ? "Glasses Linked" : "Glasses Ready"}</span>
+              </div>
+              <button
+                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${
+                  autonomousMode ? "bg-amber-500 hover:bg-amber-400" : "bg-white/15 hover:bg-white/25"
+                }`}
+                onClick={() => setAutonomousMode((v) => !v)}
+              >
                 {autonomousMode ? "Autonomous: ON" : "Autonomous"}
               </button>
-              {autonomousMode && actionQueue.filter(a=>a.status==="proposed").length > 0 && (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">{actionQueue.filter(a=>a.status==="proposed").length}</span>
+              {autonomousMode && actionQueue.filter((a) => a.status === "proposed").length > 0 && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {actionQueue.filter((a) => a.status === "proposed").length}
+                </span>
               )}
-              <button className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/15 hover:bg-white/25"}`} onClick={()=>{ setAppClosed(false); setDemoMode(v=>!v); }}>
+              <button
+                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${
+                  demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/15 hover:bg-white/25"
+                }`}
+                onClick={() => {
+                  setAppClosed(false);
+                  setDemoMode((v) => !v);
+                }}
+              >
                 {demoMode ? "Demo: ON" : "Demo"}
               </button>
             </div>
@@ -1078,8 +1115,47 @@ export default function Home() {
           </div>
 
           <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                <span className="text-slate-600">Mic</span>
+                <span className={`flex items-center gap-1 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
+                  {consented && !paused ? "On" : "Off"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                <span className="text-slate-600">Camera</span>
+                <span className={`flex items-center gap-1 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-400"}`} />
+                  {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                <span className="text-slate-600">Privacy</span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      privacyMode === "cloud"
+                        ? "bg-emerald-500"
+                        : privacyMode === "local"
+                        ? "bg-blue-500"
+                        : "bg-amber-500"
+                    }`}
+                  />
+                  {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                <span className="text-slate-600">Glasses</span>
+                <span className={`flex items-center gap-1 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-400"}`} />
+                  {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Disconnected"}
+                </span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Speaking</span>
+              <span className="text-slate-600">Speaking time</span>
               <span className="font-semibold text-slate-900">{speakingSeconds}s</span>
             </div>
             <div className="flex items-center justify-between">

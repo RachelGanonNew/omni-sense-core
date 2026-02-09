@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { preferences } = getOmniContext();
     const longMemory = await buildLongMemorySnippet({ preferences: preferences || {}, limit: 18, maxChars: 1600 });
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
 
     const system = `Role: You are the Social Intelligence Interpreter (Social Translator).
 Your purpose is to help the user interpret subtext and social intent, especially sarcasm, passive aggression, and condescension.

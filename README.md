@@ -1,12 +1,22 @@
 # OmniSense Core
 
-> **An autonomous AI agent that transforms meetings from passive recordings into active workflow automation.**
+> **A live social translator that turns real‑world interactions into coaching and autonomous action.**
 
-Proactive, privacy-first multimodal **Cognitive Second Brain** for meetings and safety.  
+Proactive, privacy-first multimodal **Cognitive Second Brain** for meetings, classrooms, and daily life.  
 Built with **Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Gemini 3 Pro**.
 
 Live URL: <https://omnisense-orchestrator.vercel.app>  
 Architecture: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+
+---
+
+## 🎯 Gemini 3 Hackathon Fit
+
+- **🧠 Marathon Agent**: Autonomous Planner + Action Queue + long‑term memory form a background agent that keeps drafting goals, creating tasks, and maintaining continuity across days of interactions.
+- **👨‍🏫 Real‑Time Teacher**: Live mic/cam + glasses sensors drive streaming “social translation” — a 4‑line script that explains the vibe, hidden meaning, social red flags, and what to say next.
+- **☯️ Vibe Engineering**: Thought signatures, verification tools, synthetic eval (`/api/evaluate`), and audit artifacts create a closed feedback loop that continuously measures and improves behavior.
+
+OmniSense is not a prompt wrapper, not baseline RAG, and not a generic chatbot. It is a **tool‑calling orchestrator** that runs multi‑step plans, writes to long‑term memory, researches people, manages tasks, and verifies itself.
 
 ---
 
@@ -140,17 +150,18 @@ npm run lint     # ESLint
 
 ### Core Capabilities
 
-- **Real-time Social Translation** — Subtext, sarcasm, and non-verbal cue detection with structured 4-line coaching output (Vibe / Hidden Meaning / Red Flags / Social Script)
-- **Autonomous Planner** — Set a goal, the agent runs multi-step plans with tool calls; UI shows a "Working" pill with elapsed time and ETA
-- **Long-term Memory** — Every interaction (analyze, suggest, agent step) is persisted via **Upstash Redis** (`omni:long_memory:v1` key) with local JSONL fallback; memory snippets are injected into all prompts for personalized coaching
-- **Policy Engine ("Brain")** — AI-generated short-lived policies with triggers, actions, safeguards, cooldowns, and verification claims; evaluated against live observations
-- **Confidence Scoring** — A second Gemini call self-scores each insight (0–1) for clarity, actionability, and safety
-- **Evaluation System** — Dynamically generated synthetic scenarios with rubric scoring across 4 competencies (high reasoning, chain of command, location awareness, social interaction)
-- **AI Glasses Integration** — Simulated sensor bridge (head motion, brightness, temperature) with a `VendorX` placeholder for real SDK integration
-- **Phone Camera Pairing** — WebRTC signaling via server-side session store; desktop receives video from phone camera
-- **Conversational Voice** — Placeholder `LiveVoiceClient` for streaming TTS micro-coaching
-- **PWA Support** — Service worker registration, `manifest.json`, and iOS safe-area handling
-- **Draft Placeholders** — Auto-drafted Planner goals and Follow-ups notes appear in light grey; typing replaces them; draft text is not sent to the backend
+- **Real-time Social Translation** — Subtext, sarcasm, and non-verbal cue detection with structured 4-line coaching output (Vibe / Hidden Meaning / Social Red Flags / Social Script) designed to be spoken in your ear or read at a glance.
+- **Autonomous Planner ("Marathon Agent")** — Always‑ready agent that turns a goal into multi-step tool calls (`web.search`, `tasks.create`, `calendar.create_event`, `notes.write`) and logs thought signatures, accuracy, and verification for each step.
+- **Auto Follow-ups** — Background drafts of follow-up plans and notes from `/api/agent/report`; one click turns them into structured tasks, calendar links, and documents via the **Action Queue**.
+- **Long-term Memory** — Every interaction (analyze, suggest, agent step, autonomous action) is persisted via **Upstash Redis** (`omni:long_memory:v1` key) with local JSONL fallback; memory snippets are injected into all prompts so guidance adapts over weeks.
+- **Policy Engine ("Brain")** — AI-generated short-lived policies with triggers, actions, safeguards, cooldowns, and verification claims; evaluated against live observations to keep behavior safe and consistent.
+- **Confidence Scoring** — A second Gemini call self-scores each insight (0–1) for clarity, actionability, and safety, feeding into UI bars and conservative vs. proactive tuning.
+- **Evaluation System** — Dynamically generated synthetic scenarios with rubric scoring across 4 competencies (high reasoning, chain of command, location awareness, social interaction).
+- **AI Glasses Integration** — Simulated sensor bridge (head motion, brightness, temperature) with a `VendorX` placeholder for real SDK integration. Glasses signals influence engagement, dominance, and “awkward silence” detectors.
+- **Phone Camera Pairing** — WebRTC signaling via server-side session store; desktop receives video from phone camera so you can wear your phone as a body camera and see live coaching on your laptop.
+- **Conversational Voice** — Streaming micro-coaching via browser speech synthesis when in Voice mode (earphones recommended).
+- **PWA Support** — Service worker registration, `manifest.json`, and iOS safe-area handling.
+- **Draft Placeholders** — Auto-drafted Planner goals and Follow-ups notes appear in light grey; typing replaces them; draft text is not sent to the backend until you choose.
 
 ---
 

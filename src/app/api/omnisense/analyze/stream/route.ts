@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const longMemory = await buildLongMemorySnippet({ preferences: preferences || {}, limit: 18, maxChars: 1600 });
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
+  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
 
   const prompt = `${system}
 

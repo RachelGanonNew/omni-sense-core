@@ -35,7 +35,7 @@ export async function GET(_req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
     const prompt = `${systemInstruction}
 
 Create a concise post-meeting report from recent insights. Return ONLY JSON with keys: summary, risks (array of strings), actions (array of {title, owner?, due?}).

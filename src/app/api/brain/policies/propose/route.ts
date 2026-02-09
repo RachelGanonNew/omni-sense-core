@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.0-pro" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
 
     const sys = `You author short-lived, safe, verifiable policies for a daily-assistant. Output JSON with keys: id,intent,triggers,actions,safeguards,verify,ttlMs,priority. Avoid medical or sensitive-inference scopes.`;
     const prompt = `${sys}\nIntent: ${intent}\nReturn ONLY JSON.`;
