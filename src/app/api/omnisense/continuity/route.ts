@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
 
       const prompt = `You are an autonomous meeting continuity agent. Analyze the user's interaction history and task list to produce a review.
 

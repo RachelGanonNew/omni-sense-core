@@ -20,7 +20,7 @@ export function coerceInsight(raw: any): Insight {
 
 export async function scoreConfidence(genAI: GoogleGenerativeAI, out: Insight): Promise<number> {
   try {
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3-pro-preview" });
     const prompt = `Rate the following guidance for clarity, actionability, and safety (0-1). Return only a number.\nObservation: ${out.observation}\nAnalysis: ${out.analysis}\nAction: ${out.action_recommendation}`;
     const resp = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
     const t = resp.response.text().trim();
