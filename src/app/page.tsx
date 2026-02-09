@@ -31,6 +31,7 @@ export default function Home() {
   const [analyzeConfidence, setAnalyzeConfidence] = useState<number | null>(null);
   const [outputMode, setOutputMode] = useState<"text" | "voice">("text");
   const [privacyMode, setPrivacyMode] = useState<"off" | "local" | "cloud">("cloud");
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
   const speakRef = useRef<{ speak: (t: string) => void; cancel: () => void } | null>(null);
   const [glassesConnected, setGlassesConnected] = useState(false);
   const [showGlassesModal, setShowGlassesModal] = useState(false);
@@ -556,7 +557,7 @@ export default function Home() {
 
   const start = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: "user" } });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: cameraFacing } });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -803,6 +804,13 @@ export default function Home() {
                     <select className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm" value={outputMode} onChange={async (e)=>{ const v = e.target.value as "text"|"voice"; setOutputMode(v); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { outputMode: v } }) }); } catch {} }}>
                       <option value="text" className="text-gray-800">Text</option>
                       <option value="voice" className="text-gray-800">Voice</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Camera</span>
+                    <select className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm" value={cameraFacing} onChange={(e) => setCameraFacing(e.target.value as "user" | "environment")}>
+                      <option value="user">Front</option>
+                      <option value="environment">Back</option>
                     </select>
                   </label>
                   <label className="flex items-center justify-between gap-3">
