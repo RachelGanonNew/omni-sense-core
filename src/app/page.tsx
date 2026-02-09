@@ -280,6 +280,50 @@ export default function Home() {
     };
   }, [consented, paused, demoMode, privacyMode, autoRunGoal, autoNotes]);
 
+  // Autonomous mode: auto-generate and auto-execute actions on an interval
+  useEffect(() => {
+    if (!autonomousMode || !consented || paused || demoMode || privacyMode === "off") return;
+    let cancelled = false;
+
+    const autoRun = async () => {
+      if (cancelled || actionQueueLoading) return;
+      try {
+        setActionQueueLoading(true);
+        setActionQueueMsg("Auto-analyzing...");
+        const res = await fetch("/api/omnisense/autonomous-execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notes: notes.slice(0, 2000),
+            meetingSummary: summary || suggestion,
+            executeMode: false,
+          }),
+        });
+        const j = await res.json();
+        if (cancelled) return;
+        if (!res.ok) { setActionQueueMsg(`Error: ${j?.error || "failed"}`); return; }
+        const actions = j.actions || [];
+        // Auto-execute all proposed actions immediately
+        const executed = actions.map((a: any) => ({ ...a, status: "executed", executedAt: Date.now() }));
+        setActionQueue(executed);
+        setActionQueueMsg(`${executed.length} actions auto-executed`);
+        setShowActionQueue(true);
+      } catch (e: any) {
+        if (!cancelled) setActionQueueMsg(`Error: ${e?.message || String(e)}`);
+      } finally {
+        if (!cancelled) setActionQueueLoading(false);
+      }
+    };
+
+    // Run once immediately, then every 30s
+    autoRun();
+    const iv = window.setInterval(autoRun, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(iv);
+    };
+  }, [autonomousMode, consented, paused, demoMode, privacyMode]);
+
   useEffect(() => {
     if (!runStartedAt) return;
     setRunElapsedSec(0);
@@ -790,7 +834,7 @@ export default function Home() {
       <aside
         className={`fixed left-0 top-0 z-40 hidden h-screen border-r border-slate-200 bg-gradient-to-b from-white via-slate-50 to-slate-100 md:block ${sidebarOpen ? "w-72" : "w-14"}`}
       >
-        <div className="flex h-full flex-col p-3">
+        <div className="flex h-full flex-col overflow-y-auto p-3">
           <div className="flex-1">
             {sidebarOpen && (
               <>
@@ -816,6 +860,10 @@ export default function Home() {
                   <label className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">Privacy</span>
                     <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-indigo-400 bg-gradient-to-br from-indigo-500 to-purple-600" />
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700">Autonomous</span>
+                    <input type="checkbox" checked={autonomousMode} onChange={() => setAutonomousMode((v) => !v)} className="h-4 w-4 rounded-md border-2 border-amber-400 bg-gradient-to-br from-amber-500 to-orange-600" />
                   </label>
                   <button className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium shadow-sm hover:bg-slate-50 ${glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
                   <button className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={closeApp}>Close App</button>
@@ -1000,6 +1048,11 @@ export default function Home() {
                   />
                 </label>
 
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-slate-700">Autonomous</span>
+                  <input type="checkbox" checked={autonomousMode} onChange={() => setAutonomousMode((v) => !v)} className="h-4 w-4 rounded-md border-2 border-amber-400 bg-gradient-to-br from-amber-500 to-orange-600" />
+                </label>
+
                 <button
                   className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 ${
                     glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"
@@ -1105,19 +1158,6 @@ export default function Home() {
               <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Live social translator · Gemini 3 Pro</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button
-                className={`relative rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition sm:text-sm ${
-                  autonomousMode ? "bg-amber-500 hover:bg-amber-400" : "bg-white/15 hover:bg-white/25"
-                }`}
-                onClick={() => setAutonomousMode((v) => !v)}
-              >
-                {autonomousMode ? "Auto ON" : "Auto"}
-                {autonomousMode && actionQueue.filter((a) => a.status === "proposed").length > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                    {actionQueue.filter((a) => a.status === "proposed").length}
-                  </span>
-                )}
-              </button>
               <button
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition sm:text-sm ${
                   demoMode ? "bg-emerald-500 hover:bg-emerald-400" : "bg-white/15 hover:bg-white/25"
@@ -1343,21 +1383,16 @@ export default function Home() {
           )}
         </section>
 
-        {/* Autonomous Action Queue */}
+        {/* Autonomous Action Log */}
         {autonomousMode && (
           <section className={`md:col-span-12 ${cardBase}`}>
             <div className={cardTitleRow}>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Action Queue</h3>
-                <div className="mt-1 text-xs text-slate-500">AI-proposed actions from meeting analysis. Review, approve, or rate.</div>
+                <h3 className="text-lg font-semibold text-slate-900">Autonomous Actions</h3>
+                <div className="mt-1 text-xs text-slate-500">Auto-generated and executed from live meeting context.</div>
               </div>
               <div className="flex items-center gap-2">
-                <button className={secondaryBtn} onClick={generateAutonomousActions} disabled={actionQueueLoading}>
-                  {actionQueueLoading ? "Analyzing..." : "Generate Actions"}
-                </button>
-                {actionQueue.filter(a => a.status === "proposed").length > 0 && (
-                  <button className={primaryBtn} onClick={approveAllActions}>Approve All</button>
-                )}
+                {actionQueueLoading && <span className="text-xs text-slate-500">Analyzing...</span>}
                 <button className={`${secondaryBtn} text-xs`} onClick={() => loadContinuity("review")}>
                   Session Review
                 </button>
@@ -1417,17 +1452,10 @@ export default function Home() {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        {action.status === "proposed" && (
-                          <>
-                            <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500" onClick={() => executeAction(action.id)}>
-                              Execute
-                            </button>
-                            {action.type === "calendar" && action.data?.date && (
-                              <a className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
-                                Open Calendar
-                              </a>
-                            )}
-                          </>
+                        {action.status === "executed" && action.type === "calendar" && action.data?.date && (
+                          <a className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
+                            Open Calendar
+                          </a>
                         )}
                         {action.status === "executed" && !action.userRating && (
                           <div className="flex items-center gap-1">
