@@ -17,10 +17,9 @@ export async function POST(req: NextRequest) {
         observation: "Balanced turn-taking could be improved",
         analysis: "One voice dominates; others paused. Consider inviting input and clarifying next steps.",
         action_recommendation:
-          "The Vibe: Slightly tense; one person dominates.\n" +
-          "The Hidden Meaning: Others may be holding back.\n" +
-          "Social Red Flags: Little turn-taking; long monologue.\n" +
-          "The Social Script: What to say: ‘Quick check—anyone else want to weigh in?’",
+          "The Leak: One voice is dominating — others are holding back.\n" +
+          "The Fix: Say: 'Quick check — anyone else want to weigh in before we move on?'\n" +
+          "The Vibe: Open palms, slight lean back.",
       });
       sample.confidence = 0.5;
       agentAddEvent("insight", sample);
@@ -84,15 +83,18 @@ LongTermMemory (recent interactions; may be empty):
 ${longMemory || ""}
 
 Instructions:
+You are OmniSense — The Tactical Fixer. A high-speed social intelligence engine.
+Your goal: give the user the "Perfect Move" to handle any social friction instantly. Keep analysis minimal, solution maximal.
+Always provide a "Graceful Exit" — give the other person a way to tell the truth without feeling embarrassed.
+
 - Return ONLY a JSON object with keys: insight_type, observation, analysis, action_recommendation.
 - Set insight_type to "Social".
 - Keep it concise and actionable.
 - Avoid sensitive attribute inferences; do not mention biometrics or identity.
-- action_recommendation MUST be 4 short lines, exactly:
-  The Vibe: ...
-  The Hidden Meaning: ...
-  Social Red Flags: ...
-  The Social Script: What to understand: ... What to say: ... What to do: ...
+- action_recommendation MUST be EXACTLY 3 short lines:
+  The Leak: 1 sentence on the truth — what is really happening right now.
+  The Fix: The exact action and sentence to solve it NOW. Be specific — give a quote the user can say.
+  The Vibe: 2-3 words on the body language to use (e.g., "Playful wink, lean back").
 ${tuning ? `\nTuning: ${tuning}` : ""}
 `;
 
@@ -103,10 +105,9 @@ ${tuning ? `\nTuning: ${tuning}` : ""}
         observation: "Local mode enabled — providing generic advice",
         analysis: "Based on audio dynamics and transcript snippet only.",
         action_recommendation:
-          "The Vibe: Neutral (local privacy mode).\n" +
-          "The Hidden Meaning: Limited context; using safe defaults.\n" +
-          "Social Red Flags: None detected with high confidence.\n" +
-          "The Social Script: What to say: ‘Let’s pause—what’s the main point?’",
+          "The Leak: Local privacy mode — limited context available.\n" +
+          "The Fix: Say: 'Let's pause — what's the main point here?'\n" +
+          "The Vibe: Calm nod, open hands.",
       });
       local.confidence = 0.45;
       agentAddEvent("insight", local);

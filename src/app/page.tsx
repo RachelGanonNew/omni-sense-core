@@ -16,7 +16,7 @@ export default function Home() {
   const [speakingMs, setSpeakingMs] = useState(0);
   const [interruption, setInterruption] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string>(
-    "Stay concise. Invite others to weigh in. Clarify owners and dates."
+    "The Leak: Waiting for input — no live context yet.\nThe Fix: Enable mic and camera to start.\nThe Vibe: Relaxed, ready."
   );
   const [notes, setNotes] = useState("");
   const [notesIsDraft, setNotesIsDraft] = useState(false);
@@ -299,9 +299,9 @@ export default function Home() {
       setPaused(false);
 
       const demoTips = [
-        "The Vibe: Friendly but a bit sarcastic.\nThe Hidden Meaning: They’re teasing, not literally criticizing.\nThe Social Script: What to say: ‘Haha fair—what would you do instead?’",
-        "The Vibe: Tense and dismissive.\nThe Hidden Meaning: They may be signaling impatience.\nThe Social Script: What to say: ‘Got it—what’s the one thing you need from me right now?’",
-        "The Vibe: Polite but condescending.\nThe Hidden Meaning: They’re testing boundaries.\nThe Social Script: What to say: ‘I want to help—please tell me what you’re expecting.’",
+        "The Leak: They're teasing, not literally criticizing — words and tone don't match.\nThe Fix: Laugh it off and say: 'Haha fair — what would you do instead?'\nThe Vibe: Playful grin, lean back.",
+        "The Leak: Short replies and impatient tone — they want this wrapped up fast.\nThe Fix: Say: 'Got it — what's the one thing you need from me right now?'\nThe Vibe: Direct eye contact, calm nod.",
+        "The Leak: Overly polite wording is masking condescension — they're testing your boundaries.\nThe Fix: Say: 'I appreciate that — let's cut to what you actually need.'\nThe Vibe: Steady posture, slight smile.",
       ];
 
       const now = Date.now();
