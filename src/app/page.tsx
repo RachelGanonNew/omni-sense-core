@@ -13,10 +13,12 @@ export default function Home() {
   const [consented, setConsented] = useState(false);
   const [paused, setPaused] = useState(false);
   const [levels, setLevels] = useState<Levels>({ rms: 0, speaking: false });
+  const levelsRef = useRef<Levels>({ rms: 0, speaking: false });
+  const levelsFlushRef = useRef<number>(0);
   const [speakingMs, setSpeakingMs] = useState(0);
   const [interruption, setInterruption] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string>(
-    "Stay concise. Invite others to weigh in. Clarify owners and dates."
+    "The Leak: Waiting for input — no live context yet.\nThe Fix: Enable mic and camera to start.\nThe Vibe: Relaxed, ready."
   );
   const [notes, setNotes] = useState("");
   const [notesIsDraft, setNotesIsDraft] = useState(false);
@@ -70,7 +72,6 @@ export default function Home() {
   const demoIntervalRef = useRef<number | null>(null);
   const [showDemo, setShowDemo] = useState<boolean>(false);
   const [showDetectionsSidebar, setShowDetectionsSidebar] = useState<boolean>(true);
-  const [showAuditLink, setShowAuditLink] = useState<boolean>(true);
   const [healthMsg, setHealthMsg] = useState<string>("");
   const [autonomousMode, setAutonomousMode] = useState<boolean>(false);
   const [actionQueue, setActionQueue] = useState<any[]>([]);
@@ -92,9 +93,8 @@ export default function Home() {
   const bridgeRef = useRef<GlassesBridge | null>(null);
 
   const speakingThreshold = 0.06; // heuristic
-  const spikeFactor = 2.2; // interruption heuristic
 
-  const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur";
+  const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur will-change-auto [transform:translateZ(0)]";
   const cardTitleRow = "mb-4 flex items-start justify-between gap-3";
   const pillBase = "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium";
   const primaryBtn = "rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900";
@@ -280,6 +280,82 @@ export default function Home() {
     };
   }, [consented, paused, demoMode, privacyMode, autoRunGoal, autoNotes]);
 
+  // Background Intel: always-on auto-generate and auto-execute actions
+  useEffect(() => {
+    if (!consented || paused || demoMode || privacyMode === "off") return;
+    let cancelled = false;
+
+    const autoRun = async () => {
+      if (cancelled || actionQueueLoading) return;
+      try {
+        setActionQueueLoading(true);
+        const res = await fetch("/api/omnisense/autonomous-execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notes: notes.slice(0, 2000),
+            meetingSummary: summary || suggestion,
+            executeMode: false,
+          }),
+        });
+        const j = await res.json();
+        if (cancelled) return;
+        if (!res.ok) return;
+        const newActions = j.actions || [];
+        const executed = newActions.map((a: any) => ({ ...a, status: "executed", executedAt: Date.now() }));
+        setActionQueue((prev) => [...executed, ...prev].slice(0, 20));
+        setActionQueueMsg(executed.length ? `${executed.length} new intel` : "");
+      } catch {} finally {
+        if (!cancelled) setActionQueueLoading(false);
+      }
+    };
+
+    // Auto-detect goals from transcript and run planner silently
+    const autoPlanner = async () => {
+      if (cancelled) return;
+      const transcript = notes.slice(0, 500);
+      if (!transcript || transcript.length < 20) return;
+      try {
+        const res = await fetch("/api/agent/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            goal: `From this conversation, detect any plans, commitments, or action items and organize them: "${transcript.slice(0, 300)}"`,
+            steps: 2,
+            maxTools: 2,
+          }),
+        });
+        const j = await res.json();
+        if (cancelled || !res.ok) return;
+        const result = j?.steps?.map((s: any) => s?.final || "").filter(Boolean).join("\n") || "";
+        if (result) {
+          setPlannerTasks((prev) => [{
+            id: `auto-${Date.now()}`,
+            goal: "Auto-detected from conversation",
+            status: "done" as const,
+            result: String(result),
+            startedAt: Date.now() - 5000,
+            finishedAt: Date.now(),
+          }, ...prev].slice(0, 10));
+        }
+      } catch {}
+    };
+
+    // Stagger: actions at 15s, planner at 45s, then repeat
+    const ivActions = window.setInterval(autoRun, 30000);
+    const ivPlanner = window.setInterval(autoPlanner, 45000);
+    // Initial runs with delay
+    const t1 = setTimeout(autoRun, 5000);
+    const t2 = setTimeout(autoPlanner, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(ivActions);
+      window.clearInterval(ivPlanner);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [consented, paused, demoMode, privacyMode]);
+
   useEffect(() => {
     if (!runStartedAt) return;
     setRunElapsedSec(0);
@@ -299,17 +375,30 @@ export default function Home() {
       setPaused(false);
 
       const demoTips = [
-        "The Vibe: Friendly but a bit sarcastic.\nThe Hidden Meaning: They’re teasing, not literally criticizing.\nThe Social Script: What to say: ‘Haha fair—what would you do instead?’",
-        "The Vibe: Tense and dismissive.\nThe Hidden Meaning: They may be signaling impatience.\nThe Social Script: What to say: ‘Got it—what’s the one thing you need from me right now?’",
-        "The Vibe: Polite but condescending.\nThe Hidden Meaning: They’re testing boundaries.\nThe Social Script: What to say: ‘I want to help—please tell me what you’re expecting.’",
+        "The Leak: They're teasing, not literally criticizing — words and tone don't match.\nThe Fix: Laugh it off and say: 'Haha fair — what would you do instead?'\nThe Vibe: Playful grin, lean back.",
+        "The Leak: Short replies and impatient tone — they want this wrapped up fast.\nThe Fix: Say: 'Got it — what's the one thing you need from me right now?'\nThe Vibe: Direct eye contact, calm nod.",
+        "The Leak: Overly polite wording is masking condescension — they're testing your boundaries.\nThe Fix: Say: 'I appreciate that — let's cut to what you actually need.'\nThe Vibe: Steady posture, slight smile.",
       ];
 
       const now = Date.now();
       setDetections([
-        { t: now, kind: "Sarcasm likely", info: "Words and tone don’t match" },
+        { t: now, kind: "Sarcasm likely", info: "Words and tone don't match" },
         { t: now - 7000, kind: "Pressure", info: "Short replies, impatient tone" },
         { t: now - 14000, kind: "Condescending", info: "Overly polite wording" },
       ]);
+
+      // Populate Background Intel with demo data
+      setActionQueue([
+        { id: "demo-1", type: "calendar", title: "Dinner with Alex — Saturday 7pm", description: "Detected from conversation: 'Let's grab dinner Saturday evening'", confidence: 0.92, status: "executed", executedAt: now, data: { date: "2026-02-14", time: "19:00" } },
+        { id: "demo-2", type: "task", title: "Send Sarah the article about AI glasses", description: "Commitment detected: 'I'll send you that link later'", confidence: 0.85, status: "executed", executedAt: now - 5000 },
+        { id: "demo-3", type: "email", title: "Follow up with Jordan re: project timeline", description: "Action item from earlier: 'We need to sync on deadlines'", confidence: 0.78, status: "executed", executedAt: now - 12000, data: { to: "jordan@example.com", subject: "Project timeline sync", body: "Hey Jordan — following up on our chat. Want to lock in deadlines this week. When works for you?" } },
+        { id: "demo-4", type: "task", title: "Book flights for March trip", description: "Mentioned twice in conversation — flagged as high priority", confidence: 0.88, status: "executed", executedAt: now - 20000 },
+      ]);
+      setPlannerTasks([
+        { id: "demo-plan-1", goal: "Auto-detected from conversation", status: "done" as const, result: "Plan detected: Saturday dinner with Alex at 7pm.\nSuggestion: Book a table at the Italian place you both liked last time. Mention the new dessert menu — Alex has a sweet tooth.", startedAt: now - 30000, finishedAt: now - 25000 },
+        { id: "demo-plan-2", goal: "Auto-detected from conversation", status: "done" as const, result: "Upcoming: Jordan seems stressed about the project deadline.\nAdvice: Lead with empathy — ask how they're doing before jumping into logistics. Offer to take one task off their plate.", startedAt: now - 60000, finishedAt: now - 55000 },
+      ]);
+      setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.\nSarah asked about AI glasses article from last week.");
 
       let i = 0;
       setSuggestion(demoTips[i]);
@@ -324,6 +413,9 @@ export default function Home() {
     if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
     demoIntervalRef.current = null;
     setDetections([]);
+    setActionQueue([]);
+    setPlannerTasks([]);
+    setNotes("");
     if (suggestionBeforeDemoRef.current) setSuggestion(suggestionBeforeDemoRef.current);
   }, [demoMode, teardown]);
 
@@ -341,18 +433,19 @@ export default function Home() {
 
     const prevSpeaking = lastSpeakingRef.current;
     const prevRms = lastRmsRef.current;
-    setLevels({ rms, speaking });
+    levelsRef.current = { rms, speaking };
+    // Throttle state updates to ~2/sec to prevent iPhone flickering
+    const now2 = Date.now();
+    if (now2 - levelsFlushRef.current > 500) {
+      levelsFlushRef.current = now2;
+      setLevels({ rms, speaking });
+    }
 
     if (startedAtRef.current == null) startedAtRef.current = performance.now();
     const now = performance.now();
 
-    if (!paused && speaking) {
-      setSpeakingMs((ms) => ms + 1000 / 30);
-    }
-
-    if (!prevSpeaking && speaking && prevRms > 0 && rms / (prevRms + 1e-6) > spikeFactor) {
-      setInterruption("Possible interruption detected");
-      setTimeout(() => setInterruption(null), 1500);
+    if (!paused && speaking && now2 - levelsFlushRef.current < 50) {
+      setSpeakingMs((ms) => ms + 500);
     }
 
     lastSpeakingRef.current = speaking;
@@ -449,7 +542,10 @@ export default function Home() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          if (!res.ok || !res.body) return;
+          if (!res.ok || !res.body) {
+            if (!cancelled) setSuggestion(`API error (${res.status}). Retrying...`);
+            return;
+          }
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let buf = "";
@@ -459,6 +555,18 @@ export default function Home() {
             buf += decoder.decode(value, { stream: true });
             const chunks = buf.split("\n\n");
             for (const chunk of chunks) {
+              if (chunk.includes("event: error") && chunk.includes("data:")) {
+                const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+                if (line && !cancelled) {
+                  try {
+                    const errObj = JSON.parse(line.slice(5).trim());
+                    setSuggestion(`Model error: ${errObj.error?.slice(0, 200) || "unknown"}. Retrying...`);
+                  } catch {
+                    setSuggestion("Model error. Retrying...");
+                  }
+                }
+                return;
+              }
               if (chunk.includes("event: insight") && chunk.includes("data:")) {
                 const line = chunk.split("\n").find((l) => l.startsWith("data:"));
                 if (line) {
@@ -475,8 +583,10 @@ export default function Home() {
             }
           }
         }
-      } catch {}
-    }, 1000);
+      } catch (err: any) {
+        if (!cancelled) setSuggestion(`Connection error. Retrying...`);
+      }
+    }, 3000);
     return () => {
       cancelled = true;
       clearInterval(iv);
@@ -770,6 +880,7 @@ export default function Home() {
                 data-testid="consent-enable"
                 onClick={async () => {
                   setConsented(true);
+                  setSuggestion("Connecting to AI model...");
                   await start();
                 }}
               >
@@ -790,12 +901,12 @@ export default function Home() {
       <aside
         className={`fixed left-0 top-0 z-40 hidden h-screen border-r border-slate-200 bg-gradient-to-b from-white via-slate-50 to-slate-100 md:block ${sidebarOpen ? "w-72" : "w-14"}`}
       >
-        <div className="flex h-full flex-col p-3">
+        <div className="flex h-full flex-col overflow-y-auto p-3">
           <div className="flex-1">
             {sidebarOpen && (
               <>
 
-              <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
                 <div className="mb-1 text-lg font-semibold tracking-tight text-slate-900">Settings</div>
                 <div className="mb-4 text-xs text-slate-500">Control privacy, output, and device inputs.</div>
                 <div className="space-y-4 text-sm">
@@ -822,6 +933,72 @@ export default function Home() {
                 </div>
               </div>
 
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+                <div className="mb-1 text-sm font-semibold tracking-tight text-slate-900">Session</div>
+                <div className="mb-3 text-xs text-slate-500">Live signals and sensors.</div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Mic</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      {consented && !paused ? "On" : "Off"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Camera</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Privacy</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${privacyMode === "cloud" ? "text-emerald-700" : privacyMode === "local" ? "text-blue-700" : "text-amber-700"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${privacyMode === "cloud" ? "bg-emerald-500" : privacyMode === "local" ? "bg-blue-500" : "bg-amber-500"}`} />
+                      {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Glasses</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Off"}
+                    </span>
+                  </div>
+                  <div className="mt-1 border-t border-slate-100 pt-2">
+                    <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                      <span className="text-slate-600">Speaking</span>
+                      <span className="font-medium text-slate-900">{speakingSeconds}s</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Intensity</span>
+                    <span className="font-medium text-slate-900">{intensityPct}%</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Engagement</span>
+                    <span className="font-medium text-slate-900">{engagement}</span>
+                  </div>
+                  {sensorSample && (
+                    <div className="mt-1 border-t border-slate-100 pt-2">
+                      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sensors</div>
+                      <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                        <span className="text-slate-600">Head motion</span>
+                        <span className="font-medium text-slate-900">{sensorSample?.headMotion || "-"}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                        <span className="text-slate-600">Brightness</span>
+                        <span className="font-medium text-slate-900">{typeof sensorSample?.brightness === "number" ? sensorSample.brightness : "-"}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                        <span className="text-slate-600">Temp</span>
+                        <span className="font-medium text-slate-900">{typeof sensorSample?.temp === "number" ? sensorSample.temp : "-"}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {demoMode && (
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
                   <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
@@ -830,13 +1007,9 @@ export default function Home() {
                   {showDemo && (
                     <div className="mt-3 space-y-3 text-sm">
                       <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                      <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
                       <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                         Check API Health
                       </button>
-                      {showAuditLink && (
-                        <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
-                      )}
                       {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
                     </div>
                   )}
@@ -951,6 +1124,55 @@ export default function Home() {
               </div>
             </div>
 
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+              <div className="mb-1 text-sm font-semibold tracking-tight text-slate-900">Session</div>
+              <div className="mb-3 text-xs text-slate-500">Live signals and sensors.</div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Mic</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {consented && !paused ? "On" : "Off"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Camera</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Privacy</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${privacyMode === "cloud" ? "text-emerald-700" : privacyMode === "local" ? "text-blue-700" : "text-amber-700"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${privacyMode === "cloud" ? "bg-emerald-500" : privacyMode === "local" ? "bg-blue-500" : "bg-amber-500"}`} />
+                    {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Glasses</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Off"}
+                  </span>
+                </div>
+                <div className="mt-1 border-t border-slate-100 pt-2">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Speaking</span>
+                    <span className="font-medium text-slate-900">{speakingSeconds}s</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Intensity</span>
+                  <span className="font-medium text-slate-900">{intensityPct}%</span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Engagement</span>
+                  <span className="font-medium text-slate-900">{engagement}</span>
+                </div>
+              </div>
+            </div>
+
             {demoMode && (
               <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
                 <button className="w-full text-left text-sm font-semibold" onClick={() => setShowDemo((v) => !v)}>
@@ -959,13 +1181,9 @@ export default function Home() {
                 {showDemo && (
                   <div className="mt-3 space-y-3 text-sm">
                     <label className="flex items-center justify-between"><span>Show Detections</span><input type="checkbox" checked={showDetectionsSidebar} onChange={(e)=>setShowDetectionsSidebar(e.target.checked)} /></label>
-                    <label className="flex items-center justify-between"><span>Show Audit Link</span><input type="checkbox" checked={showAuditLink} onChange={(e)=>setShowAuditLink(e.target.checked)} /></label>
                     <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                       Check API Health
                     </button>
-                    {showAuditLink && (
-                      <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
-                    )}
                     {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
                   </div>
                 )}
@@ -979,84 +1197,55 @@ export default function Home() {
 
       {/* Hero banner */}
       <div className="mx-auto w-full max-w-6xl px-6 pt-6">
-        <div className="rounded-3xl border border-white/20 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-                OmniSense — Live Social Translator
-              </h1>
-              <p className="mt-1 text-sm text-fuchsia-50/90">
-                Real-time coaching through mic, camera, and glasses, plus autonomous follow-ups.
-              </p>
+        <div className="rounded-3xl border border-white/20 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 px-6 py-5 shadow-2xl">
+          {/* Top row: title + action buttons */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <button className="rounded-lg bg-white/15 px-2 py-1.5 text-white hover:bg-white/25 md:hidden" onClick={() => setMobileSidebarOpen(true)}>≡</button>
+                <h1 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">OmniSense</h1>
+              </div>
+              <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Real-time social intelligence · Always listening, always ready</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <div className={`${pillBase} border-white/30 bg-white/15 text-white`}>
-                <span className={`h-2 w-2 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/60"}`} />
-                <span>{consented && !paused ? "AI Assist ON" : "AI Assist OFF"}</span>
-              </div>
-              <div className={`${pillBase} border-white/30 bg-white/10 text-white`}>
-                <span className={`h-2 w-2 rounded-full ${consented ? "bg-emerald-300" : "bg-rose-300"}`} />
-                <span>{consented ? "Camera & Mic Active" : "Camera & Mic Off"}</span>
-              </div>
-              <div className={`${pillBase} border-white/30 bg-white/10 text-white`}>
-                <span className={`h-2 w-2 rounded-full ${
-                  glassesConnected ? "bg-emerald-300" : "bg-white/60"
-                }`} />
-                <span>{glassesConnected ? "Glasses Linked" : "Glasses Ready"}</span>
-              </div>
+            <div className="flex shrink-0 items-center gap-2">
               <button
-                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${
-                  autonomousMode ? "bg-amber-500 hover:bg-amber-400" : "bg-white/15 hover:bg-white/25"
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition sm:text-sm ${
+                  demoMode ? "bg-emerald-500 hover:bg-emerald-400" : "bg-white/15 hover:bg-white/25"
                 }`}
-                onClick={() => setAutonomousMode((v) => !v)}
+                onClick={() => { setAppClosed(false); setDemoMode((v) => !v); }}
               >
-                {autonomousMode ? "Autonomous: ON" : "Autonomous"}
+                {demoMode ? "Demo ON" : "Demo"}
               </button>
-              {autonomousMode && actionQueue.filter((a) => a.status === "proposed").length > 0 && (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {actionQueue.filter((a) => a.status === "proposed").length}
-                </span>
+              {!sidebarOpen && (
+                <button className="hidden rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25 md:block sm:text-sm" onClick={() => setSidebarOpen(true)}>
+                  Settings
+                </button>
               )}
-              <button
-                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${
-                  demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/15 hover:bg-white/25"
-                }`}
-                onClick={() => {
-                  setAppClosed(false);
-                  setDemoMode((v) => !v);
-                }}
-              >
-                {demoMode ? "Demo: ON" : "Demo"}
-              </button>
             </div>
+          </div>
+          {/* Status dots row */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-white/80">
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/40"}`} />
+              {consented && !paused ? "Listening" : "Mic off"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-300" : "bg-white/40"}`} />
+              {consented ? (cameraFacing === "user" ? "Front cam" : "Back cam") : "Cam off"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-300" : "bg-white/40"}`} />
+              {glassesConnected ? "Glasses" : "No glasses"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${privacyMode === "cloud" ? "bg-emerald-300" : privacyMode === "local" ? "bg-blue-300" : "bg-amber-300"}`} />
+              {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Privacy off"}
+            </span>
           </div>
         </div>
       </div>
 
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-3">
-          <button className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm shadow-sm hover:bg-slate-50 md:hidden" onClick={() => setMobileSidebarOpen(true)}>
-            ≡
-          </button>
-          <div className={`${pillBase} ${privacyMode === "off" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700"}`}>
-            <span className={`h-2 w-2 rounded-full ${privacyMode === "off" ? "bg-amber-500" : "bg-emerald-500"}`} />
-            <span>{privacyMode === "off" ? "Privacy off" : "Cloud enabled"}</span>
-          </div>
-          <div className={`${pillBase} border-slate-200 bg-white text-slate-700`}>
-            <span className="text-slate-500">Format</span>
-            <span className="font-semibold text-slate-900">{outputMode === "voice" ? "Voice" : "Text"}</span>
-          </div>
-        </div>
-        {!sidebarOpen && (
-          <div className="hidden items-center gap-2 md:flex">
-            <button className={secondaryBtn} onClick={() => setSidebarOpen(true)}>
-              Settings
-            </button>
-          </div>
-        )}
-      </header>
-
-      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-12">
+      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pt-6 pb-12 md:grid-cols-12">
         {/* User Journey Status */}
         <div className="md:col-span-12">
           <UserJourneyStatus
@@ -1106,96 +1295,8 @@ export default function Home() {
           </div>
         )}
 
-        <section className={`md:col-span-3 ${cardBase}`}>
-          <div className={cardTitleRow}>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Session</h3>
-              <div className="mt-1 text-xs text-slate-500">Live signals and device status.</div>
-            </div>
-          </div>
-
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Mic</span>
-                <span className={`flex items-center gap-1 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {consented && !paused ? "On" : "Off"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Camera</span>
-                <span className={`flex items-center gap-1 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Privacy</span>
-                <span className="flex items-center gap-1 font-medium">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      privacyMode === "cloud"
-                        ? "bg-emerald-500"
-                        : privacyMode === "local"
-                        ? "bg-blue-500"
-                        : "bg-amber-500"
-                    }`}
-                  />
-                  {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Glasses</span>
-                <span className={`flex items-center gap-1 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Disconnected"}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Speaking time</span>
-              <span className="font-semibold text-slate-900">{speakingSeconds}s</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Intensity</span>
-              <span className="font-semibold text-slate-900">{intensityPct}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Engagement</span>
-              <span className="font-semibold text-slate-900">{engagement}</span>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="mb-2 text-xs font-semibold text-slate-700">Sensors</div>
-              <div className="space-y-1 text-xs text-slate-600">
-                <div className="flex items-center justify-between">
-                  <span>Head motion</span>
-                  <span className="font-medium text-slate-900">{sensorSample?.headMotion || "-"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Brightness</span>
-                  <span className="font-medium text-slate-900">{typeof sensorSample?.brightness === "number" ? sensorSample.brightness : "-"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Temp</span>
-                  <span className="font-medium text-slate-900">{typeof sensorSample?.temp === "number" ? sensorSample.temp : "-"}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-xs font-semibold text-slate-700">Glasses</div>
-              <div className={`text-xs font-semibold ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                {reconnecting ? "Reconnecting…" : glassesConnected ? "Connected" : "Not connected"}
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Live Suggestions only; camera runs in background */}
-        <section className={`md:col-span-9 ${cardBase}`}>
+        <section className={`md:col-span-12 ${cardBase}`}>
           <div className={cardTitleRow}>
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Live Suggestions</h3>
@@ -1203,7 +1304,6 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               {demoMode && <div className={`${pillBase} border-slate-200 bg-slate-50 text-slate-700`}>Demo</div>}
-              {interruption && <div className={`${pillBase} border-amber-200 bg-amber-50 text-amber-800`}>Interruption</div>}
             </div>
           </div>
           {demoMode && (
@@ -1223,378 +1323,63 @@ export default function Home() {
           <video ref={videoRef} className="hidden h-[1px] w-[1px]" muted playsInline />
         </section>
 
-        
-
-        <section className={`md:col-span-12 ${cardBase}`}>
+        {/* Background Intel — unified auto-planner, actions, and notes */}
+        <section className={`md:col-span-12 min-h-[200px] ${cardBase}`}>
           <div className={cardTitleRow}>
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Planner</h3>
-              <div className="mt-1 text-xs text-slate-500">Draft a goal and execute when you’re ready.</div>
+              <h3 className="text-lg font-semibold text-slate-900">Background Intel</h3>
+              <div className="mt-1 text-xs text-slate-500">Auto-collected plans, actions, and insights from your conversation.</div>
             </div>
             <div className="flex items-center gap-2">
-              {runStartedAt != null && (
-                <div className={`${pillBase} border-indigo-200 bg-indigo-50 text-indigo-800`}>
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-                  <span>Working</span>
-                </div>
+              <div className={`${pillBase} border-indigo-200 bg-indigo-50 text-indigo-800 transition-opacity duration-700 ${actionQueueLoading ? "opacity-100" : "opacity-0"}`}>
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
+                <span>Listening</span>
+              </div>
+              {(actionQueue.length > 0 || plannerTasks.length > 0) && (
+                <span className="text-xs text-slate-500">{actionQueue.length + plannerTasks.length} items</span>
               )}
-              <div className={`${pillBase} ${autoRunGoal ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
-                <span>{autoRunGoal ? "Auto" : "Manual"}</span>
-              </div>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              className={`flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-300 ${runGoalIsDraft ? "text-slate-400" : "text-slate-900"}`}
-              placeholder="Goal (e.g., Prepare follow-up plan for the meeting)"
-              value={runGoal}
-              onFocus={(e) => {
-                if (runGoalIsDraft) {
-                  try {
-                    (e.target as HTMLInputElement).select();
-                  } catch {}
-                }
-              }}
-              onChange={(e) => {
-                lastRunGoalEditRef.current = Date.now();
-                setAutoRunGoal(false);
-                const next = e.target.value;
-                if (runGoalIsDraft) setRunGoalIsDraft(false);
-                setRunGoal(next);
-                if (!next.trim()) {
-                  setRunResult("");
-                  setRunStatus("");
-                  setRunStartedAt(null);
-                  setRunGoalIsDraft(false);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  runPlannerGoal();
-                }
-              }}
-            />
-            {!autoRunGoal && (
-              <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoRunGoal(true)}>
-                Resume auto
-              </button>
-            )}
-            <button
-              className={primaryBtn}
-              disabled={!runGoal.trim() || runStartedAt != null}
-              onClick={() => runPlannerGoal()}
-            >
-              Run
-            </button>
-          </div>
-          {runStatus && <div className="text-xs text-slate-500">{runStatus} (elapsed {runElapsedSec}s, ETA ~10–30s)</div>}
-          {runResult && <div className="whitespace-pre-line text-xs text-slate-500">{runResult}</div>}
 
-          {plannerTasks.length > 0 && (
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-800">Task History</div>
-                <button className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setPlannerTasks([])}>Clear</button>
-              </div>
-              <div className="space-y-2">
-                {plannerTasks.slice(0, 20).map((task) => (
-                  <div key={task.id} className={`rounded-xl border p-3 text-sm ${task.status === "running" ? "border-indigo-200 bg-indigo-50/50" : task.status === "done" ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/50"}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 font-medium text-slate-900">
-                        {task.status === "running" && <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />}
-                        {task.status === "done" && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
-                        {task.status === "error" && <span className="h-2 w-2 rounded-full bg-red-500" />}
-                        <span className="truncate">{task.goal}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                          task.status === "running" ? "bg-indigo-100 text-indigo-700" :
-                          task.status === "done" ? "bg-emerald-100 text-emerald-700" :
-                          "bg-red-100 text-red-700"
-                        }`}>{task.status}</span>
-                        <span>{task.finishedAt ? `${((task.finishedAt - task.startedAt) / 1000).toFixed(1)}s` : `${Math.floor((Date.now() - task.startedAt) / 1000)}s`}</span>
-                      </div>
-                    </div>
-                    {task.status !== "running" && task.result && (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Show result</summary>
-                        <div className="mt-1 whitespace-pre-line rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">{task.result}</div>
-                      </details>
-                    )}
-                    {task.status === "error" && (
-                      <button className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" onClick={() => runPlannerGoal(task.goal)}>Retry</button>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {/* Static content — no conditional rendering to prevent layout jumps on iOS */}
+          <div className="space-y-3">
+            <div className="text-xs text-slate-400">
+              {actionQueue.length === 0 && plannerTasks.length === 0
+                ? "Listening for plans, commitments, and action items in your conversation..."
+                : `${actionQueue.length + plannerTasks.length} items collected`}
             </div>
-          )}
-        </section>
 
-        {/* Autonomous Action Queue */}
-        {autonomousMode && (
-          <section className={`md:col-span-12 ${cardBase}`}>
-            <div className={cardTitleRow}>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Action Queue</h3>
-                <div className="mt-1 text-xs text-slate-500">AI-proposed actions from meeting analysis. Review, approve, or rate.</div>
+            {plannerTasks.slice(0, 5).map((task) => (
+              <div key={task.id} className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm">
+                <div className="whitespace-pre-line text-slate-700">{task.result}</div>
+                <div className="mt-1 text-[10px] text-slate-400">{new Date(task.finishedAt || task.startedAt).toLocaleTimeString()}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className={secondaryBtn} onClick={generateAutonomousActions} disabled={actionQueueLoading}>
-                  {actionQueueLoading ? "Analyzing..." : "Generate Actions"}
-                </button>
-                {actionQueue.filter(a => a.status === "proposed").length > 0 && (
-                  <button className={primaryBtn} onClick={approveAllActions}>Approve All</button>
-                )}
-                <button className={`${secondaryBtn} text-xs`} onClick={() => loadContinuity("review")}>
-                  Session Review
-                </button>
-              </div>
-            </div>
-            {actionQueueMsg && <div className="mb-3 text-xs text-slate-500">{actionQueueMsg}</div>}
-            {actionQueue.length > 0 && (
-              <div className="space-y-2">
-                {actionQueue.map((action) => (
-                  <div key={action.id} className={`rounded-xl border p-4 text-sm shadow-sm ${action.status === "executed" ? "border-emerald-200 bg-emerald-50/50" : action.status === "failed" ? "border-red-200 bg-red-50/50" : "border-slate-200 bg-white"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                            action.type === "calendar" ? "bg-blue-100 text-blue-700" :
-                            action.type === "email" ? "bg-purple-100 text-purple-700" :
-                            action.type === "task" ? "bg-amber-100 text-amber-700" :
-                            action.type === "document" ? "bg-slate-100 text-slate-700" :
-                            "bg-emerald-100 text-emerald-700"
-                          }`}>{action.type}</span>
-                          <span className="font-medium text-slate-900">{action.title}</span>
-                        </div>
-                        <div className="mt-1 text-xs text-slate-600">{action.description}</div>
-                        <div className="mt-2 flex items-center gap-3 text-xs">
-                          <div className="flex items-center gap-1">
-                            <span className="text-slate-500">Confidence:</span>
-                            <div className="h-1.5 w-16 rounded-full bg-slate-200">
-                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${action.confidence * 100}%` }} />
-                            </div>
-                            <span className="font-medium">{(action.confidence * 100).toFixed(0)}%</span>
-                          </div>
-                          {action.status === "executed" && <span className="font-medium text-emerald-700">Executed</span>}
-                          {action.status === "failed" && <span className="font-medium text-red-700">Failed: {action.error}</span>}
-                        </div>
-                        {action.type === "email" && action.data?.body && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Preview email</summary>
-                            <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
-                              <div className="font-medium">To: {action.data.to}</div>
-                              <div className="font-medium">Subject: {action.data.subject}</div>
-                              <div className="mt-2 whitespace-pre-line text-slate-700">{action.data.body}</div>
-                            </div>
-                          </details>
-                        )}
-                        {action.type === "document" && action.data?.sections && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Preview document</summary>
-                            <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
-                              {action.data.sections.map((s: any, si: number) => (
-                                <div key={si} className="mb-2">
-                                  <div className="font-semibold">{s.heading}</div>
-                                  <ul className="ml-4 list-disc">{(s.items || []).map((item: string, ii: number) => <li key={ii}>{item}</li>)}</ul>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {action.status === "proposed" && (
-                          <>
-                            <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500" onClick={() => executeAction(action.id)}>
-                              Execute
-                            </button>
-                            {action.type === "calendar" && action.data?.date && (
-                              <a className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
-                                Open Calendar
-                              </a>
-                            )}
-                          </>
-                        )}
-                        {action.status === "executed" && !action.userRating && (
-                          <div className="flex items-center gap-1">
-                            <button className="rounded border border-slate-200 px-1.5 py-0.5 text-xs hover:bg-emerald-50" onClick={() => rateAction(action.id, "up")} title="Correct">👍</button>
-                            <button className="rounded border border-slate-200 px-1.5 py-0.5 text-xs hover:bg-red-50" onClick={() => rateAction(action.id, "down")} title="Incorrect">👎</button>
-                          </div>
-                        )}
-                        {action.userRating && (
-                          <span className={`text-xs font-medium ${action.userRating === "up" ? "text-emerald-600" : "text-red-600"}`}>
-                            {action.userRating === "up" ? "Verified ✓" : "Corrected"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+            ))}
 
-        {/* Continuity / Session Review Panel */}
-        {showContinuity && (
-          <section className={`md:col-span-12 ${cardBase}`}>
-            <div className={cardTitleRow}>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Session Continuity</h3>
-                <div className="mt-1 text-xs text-slate-500">Cross-session tracking, patterns, and proactive reminders.</div>
-              </div>
-              <button className={secondaryBtn} onClick={() => setShowContinuity(false)}>Close</button>
-            </div>
-            {!continuityData && <div className="text-xs text-slate-500">Loading...</div>}
-            {continuityData?.error && <div className="text-xs text-red-600">{continuityData.error}</div>}
-            {continuityData && !continuityData.error && (
-              <div className="space-y-4 text-sm">
-                {continuityData.summary && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-slate-700">Summary</div>
-                    <div className="text-slate-800">{continuityData.summary}</div>
-                  </div>
-                )}
-                {continuityData.goalProgress && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-slate-700">Goal Progress</div>
-                    <div className="text-slate-800">{continuityData.goalProgress}</div>
-                  </div>
-                )}
-                {Array.isArray(continuityData.patterns) && continuityData.patterns.length > 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-amber-800">Recurring Patterns</div>
-                    <ul className="ml-4 list-disc text-xs text-amber-900">{continuityData.patterns.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul>
-                  </div>
-                )}
-                {Array.isArray(continuityData.reminders) && continuityData.reminders.length > 0 && (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-blue-800">Proactive Reminders</div>
-                    <ul className="ml-4 list-disc text-xs text-blue-900">{continuityData.reminders.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul>
-                  </div>
-                )}
-                {Array.isArray(continuityData.recommendations) && continuityData.recommendations.length > 0 && (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-emerald-800">Recommendations</div>
-                    <ul className="ml-4 list-disc text-xs text-emerald-900">{continuityData.recommendations.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul>
-                  </div>
-                )}
-                {continuityData.feedback && (
-                  <div className="flex items-center gap-4 text-xs text-slate-600">
-                    <span>Feedback: {continuityData.feedback.total} ratings</span>
-                    <span>Accuracy: {(continuityData.feedback.accuracy * 100).toFixed(0)}%</span>
-                    <span>👍 {continuityData.feedback.up} / 👎 {continuityData.feedback.down}</span>
-                  </div>
-                )}
-                {Array.isArray(continuityData.pendingTasks) && continuityData.pendingTasks.length > 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="mb-2 text-xs font-semibold text-slate-700">Pending Tasks</div>
-                    <div className="space-y-1">{continuityData.pendingTasks.map((t: any) => (
-                      <div key={t.id} className="flex items-center justify-between rounded border border-slate-100 px-2 py-1 text-xs">
-                        <span>{t.title}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${t.status === "in_progress" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{t.status}</span>
-                      </div>
-                    ))}</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Verification/Audit removed from Home (kept for Demo Mode link elsewhere) */}
-
-        <section className={`md:col-span-12 ${cardBase}`}>
-          <div className={cardTitleRow}>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Follow‑ups</h3>
-              <div className="mt-1 text-xs text-slate-500">Auto-drafted notes you can edit and execute.</div>
-            </div>
-            <div className={`${pillBase} ${autoNotes ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
-              <span>{autoNotes ? "Auto" : "Manual"}</span>
-            </div>
-          </div>
-          <textarea
-            className={`w-full min-h-32 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm outline-none focus:border-slate-300 ${notesIsDraft ? "text-slate-400" : "text-slate-900"}`}
-            placeholder="Paste brief meeting notes (or type key commitments)..."
-            value={notes}
-            onFocus={(e) => {
-              if (notesIsDraft) {
-                try {
-                  (e.target as HTMLTextAreaElement).select();
-                } catch {}
-              }
-            }}
-            onChange={(e) => {
-              lastNotesEditRef.current = Date.now();
-              setAutoNotes(false);
-              if (notesIsDraft) setNotesIsDraft(false);
-              setNotes(e.target.value);
-            }}
-          />
-          <div className="mt-3 flex items-center gap-3">
-            {!autoNotes && (
-              <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoNotes(true)}>
-                Resume auto
-              </button>
-            )}
-            <button
-              className={primaryBtn}
-              onClick={extractActions}
-              disabled={!notes.trim() || extracting}
-            >
-              {extracting ? "Extracting..." : "Extract Actions"}
-            </button>
-            {summary && <span className="text-xs text-slate-500">Summary ready</span>}
-          </div>
-
-          {summary && (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm">
-              <div className="mb-1 font-medium">Summary</div>
-              <div className="text-slate-700">{summary}</div>
-            </div>
-          )}
-
-          {actions.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <div className="font-medium">Actions</div>
-              {actions.map((a, i) => (
-                <div key={i} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
-                  <div>
-                    <div className="font-medium">{a.title}</div>
-                    <div className="text-xs text-slate-500">
-                      {a.type}
-                      {a.owner ? ` • ${a.owner}` : ""}
-                      {a.due ? ` • due ${a.due}` : ""}
-                    </div>
-                  </div>
+            {actionQueue.slice(0, 10).map((action) => (
+              <div key={action.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
+                <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    {a.type === "calendar" && (
-                      <a
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-50"
-                        href={calendarDraftUrl(a.title, a.date, a.time)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Calendar Draft
-                      </a>
-                    )}
-                    {a.type === "task" && (
-                      <button
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-50"
-                        onClick={() => alert("Task added locally for demo")}
-                      >
-                        Add Task
-                      </button>
-                    )}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                      action.type === "calendar" ? "bg-blue-100 text-blue-700" :
+                      action.type === "email" ? "bg-purple-100 text-purple-700" :
+                      action.type === "task" ? "bg-amber-100 text-amber-700" :
+                      "bg-slate-100 text-slate-600"
+                    }`}>{action.type}</span>
+                    <span className="font-medium text-slate-900">{action.title}</span>
                   </div>
+                  {action.description && <div className="mt-0.5 text-xs text-slate-500">{action.description}</div>}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+
+            {notes ? (
+              <div className="border-t border-slate-100 pt-3">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Notes</div>
+                <div className="whitespace-pre-line rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs text-slate-600">{notes.slice(0, 500)}</div>
+              </div>
+            ) : null}
+          </div>
         </section>
 
       </main>
