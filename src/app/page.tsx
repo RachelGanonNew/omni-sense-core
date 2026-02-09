@@ -382,10 +382,23 @@ export default function Home() {
 
       const now = Date.now();
       setDetections([
-        { t: now, kind: "Sarcasm likely", info: "Words and tone don’t match" },
+        { t: now, kind: "Sarcasm likely", info: "Words and tone don't match" },
         { t: now - 7000, kind: "Pressure", info: "Short replies, impatient tone" },
         { t: now - 14000, kind: "Condescending", info: "Overly polite wording" },
       ]);
+
+      // Populate Background Intel with demo data
+      setActionQueue([
+        { id: "demo-1", type: "calendar", title: "Dinner with Alex — Saturday 7pm", description: "Detected from conversation: 'Let's grab dinner Saturday evening'", confidence: 0.92, status: "executed", executedAt: now, data: { date: "2026-02-14", time: "19:00" } },
+        { id: "demo-2", type: "task", title: "Send Sarah the article about AI glasses", description: "Commitment detected: 'I'll send you that link later'", confidence: 0.85, status: "executed", executedAt: now - 5000 },
+        { id: "demo-3", type: "email", title: "Follow up with Jordan re: project timeline", description: "Action item from earlier: 'We need to sync on deadlines'", confidence: 0.78, status: "executed", executedAt: now - 12000, data: { to: "jordan@example.com", subject: "Project timeline sync", body: "Hey Jordan — following up on our chat. Want to lock in deadlines this week. When works for you?" } },
+        { id: "demo-4", type: "task", title: "Book flights for March trip", description: "Mentioned twice in conversation — flagged as high priority", confidence: 0.88, status: "executed", executedAt: now - 20000 },
+      ]);
+      setPlannerTasks([
+        { id: "demo-plan-1", goal: "Auto-detected from conversation", status: "done" as const, result: "Plan detected: Saturday dinner with Alex at 7pm.\nSuggestion: Book a table at the Italian place you both liked last time. Mention the new dessert menu — Alex has a sweet tooth.", startedAt: now - 30000, finishedAt: now - 25000 },
+        { id: "demo-plan-2", goal: "Auto-detected from conversation", status: "done" as const, result: "Upcoming: Jordan seems stressed about the project deadline.\nAdvice: Lead with empathy — ask how they're doing before jumping into logistics. Offer to take one task off their plate.", startedAt: now - 60000, finishedAt: now - 55000 },
+      ]);
+      setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.\nSarah asked about AI glasses article from last week.");
 
       let i = 0;
       setSuggestion(demoTips[i]);
@@ -400,6 +413,9 @@ export default function Home() {
     if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
     demoIntervalRef.current = null;
     setDetections([]);
+    setActionQueue([]);
+    setPlannerTasks([]);
+    setNotes("");
     if (suggestionBeforeDemoRef.current) setSuggestion(suggestionBeforeDemoRef.current);
   }, [demoMode, teardown]);
 
@@ -871,7 +887,7 @@ export default function Home() {
             {sidebarOpen && (
               <>
 
-              <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
                 <div className="mb-1 text-lg font-semibold tracking-tight text-slate-900">Settings</div>
                 <div className="mb-4 text-xs text-slate-500">Control privacy, output, and device inputs.</div>
                 <div className="space-y-4 text-sm">
@@ -898,7 +914,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
                 <div className="mb-1 text-sm font-semibold tracking-tight text-slate-900">Session</div>
                 <div className="mb-3 text-xs text-slate-500">Live signals and sensors.</div>
                 <div className="space-y-2 text-xs">
@@ -976,9 +992,6 @@ export default function Home() {
                       <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                         Check API Health
                       </button>
-                      {showAuditLink && (
-                        <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
-                      )}
                       {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
                     </div>
                   )}
@@ -1154,9 +1167,6 @@ export default function Home() {
                     <button className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={async()=>{ try{ setHealthMsg("Checking..."); const r= await fetch('/api/health'); const j= await r.json(); setHealthMsg(r.ok? (j?.status||'OK') : 'error'); } catch { setHealthMsg('error'); } }}>
                       Check API Health
                     </button>
-                    {showAuditLink && (
-                      <a className="block rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50" href="/audit">Open Verification/Audit</a>
-                    )}
                     {healthMsg && <div className="text-xs text-slate-500">{healthMsg}</div>}
                   </div>
                 )}
