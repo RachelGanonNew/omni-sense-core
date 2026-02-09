@@ -21,10 +21,19 @@ export default function Home() {
     "Analyzing micro-expressions..."
   );
 
-  // Filming: show hardcoded result after 30s delay
+  // Filming: show hardcoded result after 30s delay, then speak the tactical script
   useEffect(() => {
     const t = setTimeout(() => {
       setSuggestion("The Reality: The Micro-Expression Gap occurs at 0:01; his brow furrows in genuine bewilderment for a fraction of a second before the \"hostage smile\" is applied.\nTactical Script: \"I saw that first reaction—you don't have to perform for me, I know it's a confusing gift.\"\nThe Move: Lean back and laugh to signal that the \"polite lie\" is no longer necessary.");
+      // Speak the tactical script line
+      try {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance("I saw that first reaction — you don't have to perform for me, I know it's a confusing gift.");
+          u.rate = 0.95;
+          window.speechSynthesis.speak(u);
+        }
+      } catch {}
     }, 30000);
     return () => clearTimeout(t);
   }, []);
