@@ -1321,96 +1321,62 @@ export default function Home() {
         </section>
 
         {/* Background Intel — unified auto-planner, actions, and notes */}
-        <section className={`md:col-span-12 ${cardBase}`}>
+        <section className={`md:col-span-12 min-h-[200px] ${cardBase}`}>
           <div className={cardTitleRow}>
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Background Intel</h3>
               <div className="mt-1 text-xs text-slate-500">Auto-collected plans, actions, and insights from your conversation.</div>
             </div>
             <div className="flex items-center gap-2">
-              {actionQueueLoading && (
-                <div className={`${pillBase} border-indigo-200 bg-indigo-50 text-indigo-800`}>
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
-                  <span>Listening</span>
-                </div>
-              )}
+              <div className={`${pillBase} border-indigo-200 bg-indigo-50 text-indigo-800 transition-opacity duration-700 ${actionQueueLoading ? "opacity-100" : "opacity-0"}`}>
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
+                <span>Listening</span>
+              </div>
               {(actionQueue.length > 0 || plannerTasks.length > 0) && (
                 <span className="text-xs text-slate-500">{actionQueue.length + plannerTasks.length} items</span>
               )}
             </div>
           </div>
 
-          {/* Empty state */}
-          {actionQueue.length === 0 && plannerTasks.length === 0 && !actionQueueLoading && (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm text-slate-500">
-              Listening for plans, commitments, and action items in your conversation...
+          {/* Static content — no conditional rendering to prevent layout jumps on iOS */}
+          <div className="space-y-3">
+            <div className="text-xs text-slate-400">
+              {actionQueue.length === 0 && plannerTasks.length === 0
+                ? "Listening for plans, commitments, and action items in your conversation..."
+                : `${actionQueue.length + plannerTasks.length} items collected`}
             </div>
-          )}
 
-          {/* Auto-detected planner insights */}
-          {plannerTasks.length > 0 && (
-            <div className="mb-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Detected Plans</div>
-                <button className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setPlannerTasks([])}>Clear</button>
+            {plannerTasks.slice(0, 5).map((task) => (
+              <div key={task.id} className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm">
+                <div className="whitespace-pre-line text-slate-700">{task.result}</div>
+                <div className="mt-1 text-[10px] text-slate-400">{new Date(task.finishedAt || task.startedAt).toLocaleTimeString()}</div>
               </div>
-              {plannerTasks.slice(0, 5).map((task) => (
-                <div key={task.id} className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm">
-                  <div className="whitespace-pre-line text-slate-700">{task.result}</div>
-                  <div className="mt-1 text-[10px] text-slate-400">{new Date(task.finishedAt || task.startedAt).toLocaleTimeString()}</div>
-                </div>
-              ))}
-            </div>
-          )}
+            ))}
 
-          {/* Auto-executed actions */}
-          {actionQueue.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</div>
-              {actionQueue.slice(0, 10).map((action) => (
-                <div key={action.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                        action.type === "calendar" ? "bg-blue-100 text-blue-700" :
-                        action.type === "email" ? "bg-purple-100 text-purple-700" :
-                        action.type === "task" ? "bg-amber-100 text-amber-700" :
-                        "bg-slate-100 text-slate-600"
-                      }`}>{action.type}</span>
-                      <span className="font-medium text-slate-900">{action.title}</span>
-                    </div>
-                    {action.description && <div className="mt-0.5 text-xs text-slate-500">{action.description}</div>}
+            {actionQueue.slice(0, 10).map((action) => (
+              <div key={action.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                      action.type === "calendar" ? "bg-blue-100 text-blue-700" :
+                      action.type === "email" ? "bg-purple-100 text-purple-700" :
+                      action.type === "task" ? "bg-amber-100 text-amber-700" :
+                      "bg-slate-100 text-slate-600"
+                    }`}>{action.type}</span>
+                    <span className="font-medium text-slate-900">{action.title}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {action.type === "calendar" && action.data?.date && (
-                      <a className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-100" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
-                        Open
-                      </a>
-                    )}
-                    {!action.userRating && (
-                      <>
-                        <button className="rounded border border-slate-200 px-1 py-0.5 text-xs hover:bg-emerald-50" onClick={() => rateAction(action.id, "up")} title="Correct">👍</button>
-                        <button className="rounded border border-slate-200 px-1 py-0.5 text-xs hover:bg-red-50" onClick={() => rateAction(action.id, "down")} title="Incorrect">👎</button>
-                      </>
-                    )}
-                    {action.userRating && (
-                      <span className={`text-[10px] font-medium ${action.userRating === "up" ? "text-emerald-600" : "text-red-600"}`}>
-                        {action.userRating === "up" ? "✓" : "✗"}
-                      </span>
-                    )}
-                  </div>
+                  {action.description && <div className="mt-0.5 text-xs text-slate-500">{action.description}</div>}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
 
-          {/* Auto-drafted notes (compact) */}
-          {notes && (
-            <div className="mt-4 border-t border-slate-100 pt-3">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Notes</div>
-              <div className="whitespace-pre-line rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs text-slate-600">{notes.slice(0, 500)}</div>
-            </div>
-          )}
+            {notes ? (
+              <div className="border-t border-slate-100 pt-3">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Notes</div>
+                <div className="whitespace-pre-line rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs text-slate-600">{notes.slice(0, 500)}</div>
+              </div>
+            ) : null}
+          </div>
         </section>
 
       </main>
