@@ -78,6 +78,7 @@ export default function Home() {
   const [showActionQueue, setShowActionQueue] = useState<boolean>(false);
   const [continuityData, setContinuityData] = useState<any>(null);
   const [showContinuity, setShowContinuity] = useState<boolean>(false);
+  const [plannerTasks, setPlannerTasks] = useState<Array<{ id: string; goal: string; status: "running" | "done" | "error"; result: string; startedAt: number; finishedAt?: number }>>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -617,6 +618,45 @@ export default function Home() {
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encode(title)}${datesParam}`;
   };
 
+  const runPlannerGoal = async (goalText?: string) => {
+    const goal = (goalText || runGoal).trim();
+    if (!goal || runStartedAt != null) return;
+    setRunGoal("");
+    setAutoRunGoal(false);
+    setRunResult("");
+    setRunStatus("Running...");
+    setRunStartedAt(Date.now());
+    setRunGoalIsDraft(false);
+    const taskId = `pt_${Date.now()}`;
+    const startedAt = Date.now();
+    setPlannerTasks((prev) => [{ id: taskId, goal, status: "running", result: "", startedAt }, ...prev]);
+    try {
+      const res = await fetch("/api/agent/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal, steps: 3, maxToolsPerStep: 2 }),
+      });
+      let json: any = null;
+      try { json = await res.json(); } catch { json = null; }
+      if (!res.ok) {
+        const msg = String(json?.detail || json?.error || res.statusText || "failed");
+        throw new Error(`${msg} (HTTP ${res.status})`);
+      }
+      const final = json?.final ? String(json.final).trim() : "";
+      const result = final || "No output returned. Try rephrasing your goal.";
+      setRunResult(result);
+      setRunStatus("");
+      setRunStartedAt(null);
+      setPlannerTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "done", result, finishedAt: Date.now() } : t));
+    } catch (e: any) {
+      const errMsg = `error: ${e?.message || String(e)}`;
+      setRunStatus("");
+      setRunStartedAt(null);
+      setRunResult(errMsg);
+      setPlannerTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "error", result: errMsg, finishedAt: Date.now() } : t));
+    }
+  };
+
   const generateAutonomousActions = async () => {
     try {
       setActionQueueLoading(true);
@@ -1152,6 +1192,12 @@ export default function Home() {
                   setRunGoalIsDraft(false);
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  runPlannerGoal();
+                }
+              }}
             />
             {!autoRunGoal && (
               <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoRunGoal(true)}>
@@ -1161,52 +1207,53 @@ export default function Home() {
             <button
               className={primaryBtn}
               disabled={!runGoal.trim() || runStartedAt != null}
-              onClick={async () => {
-                const goal = runGoal.trim();
-                if (!goal) return;
-                setRunGoal("");
-                setAutoRunGoal(false);
-                setRunResult("");
-                setRunStatus("Running...");
-                setRunStartedAt(Date.now());
-                setRunGoalIsDraft(false);
-                try {
-                  const res = await fetch("/api/agent/run", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ goal, steps: 3, maxToolsPerStep: 2 }),
-                  });
-                  let json: any = null;
-                  try {
-                    json = await res.json();
-                  } catch {
-                    json = null;
-                  }
-                  if (!res.ok) {
-                    const msg = String(json?.detail || json?.error || res.statusText || "failed");
-                    throw new Error(`${msg} (HTTP ${res.status})`);
-                  }
-                  const final = json?.final ? String(json.final) : "";
-                  const finalTrim = final.trim();
-                  if (!finalTrim) {
-                    setRunResult("No output returned. Try rephrasing your goal (be specific about the desired format and next steps).");
-                  } else {
-                    setRunResult(finalTrim);
-                  }
-                  setRunStatus("");
-                  setRunStartedAt(null);
-                } catch (e: any) {
-                  setRunStatus("");
-                  setRunStartedAt(null);
-                  setRunResult(`error: ${e?.message || String(e)}`);
-                }
-              }}
+              onClick={() => runPlannerGoal()}
             >
               Run
             </button>
           </div>
           {runStatus && <div className="text-xs text-slate-500">{runStatus} (elapsed {runElapsedSec}s, ETA ~10–30s)</div>}
           {runResult && <div className="whitespace-pre-line text-xs text-slate-500">{runResult}</div>}
+
+          {plannerTasks.length > 0 && (
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-800">Task History</div>
+                <button className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setPlannerTasks([])}>Clear</button>
+              </div>
+              <div className="space-y-2">
+                {plannerTasks.slice(0, 20).map((task) => (
+                  <div key={task.id} className={`rounded-xl border p-3 text-sm ${task.status === "running" ? "border-indigo-200 bg-indigo-50/50" : task.status === "done" ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/50"}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-medium text-slate-900">
+                        {task.status === "running" && <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />}
+                        {task.status === "done" && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                        {task.status === "error" && <span className="h-2 w-2 rounded-full bg-red-500" />}
+                        <span className="truncate">{task.goal}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                          task.status === "running" ? "bg-indigo-100 text-indigo-700" :
+                          task.status === "done" ? "bg-emerald-100 text-emerald-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>{task.status}</span>
+                        <span>{task.finishedAt ? `${((task.finishedAt - task.startedAt) / 1000).toFixed(1)}s` : `${Math.floor((Date.now() - task.startedAt) / 1000)}s`}</span>
+                      </div>
+                    </div>
+                    {task.status !== "running" && task.result && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Show result</summary>
+                        <div className="mt-1 whitespace-pre-line rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">{task.result}</div>
+                      </details>
+                    )}
+                    {task.status === "error" && (
+                      <button className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" onClick={() => runPlannerGoal(task.goal)}>Retry</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Autonomous Action Queue */}
