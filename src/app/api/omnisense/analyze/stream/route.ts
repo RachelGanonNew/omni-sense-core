@@ -73,9 +73,11 @@ Always provide a "Graceful Exit" — give the other person a way to tell the tru
         controller.enqueue(new TextEncoder().encode(`event: done\n`));
         controller.enqueue(new TextEncoder().encode(`data: end\n\n`));
         controller.close();
-      } catch (err) {
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        console.error("[stream] Gemini error:", errMsg);
         controller.enqueue(new TextEncoder().encode(`event: error\n`));
-        controller.enqueue(new TextEncoder().encode(`data: failed\n\n`));
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`));
         controller.close();
       }
     },
