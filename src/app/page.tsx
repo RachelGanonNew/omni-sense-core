@@ -542,7 +542,10 @@ export default function Home() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          if (!res.ok || !res.body) return;
+          if (!res.ok || !res.body) {
+            if (!cancelled) setSuggestion(`API error (${res.status}). Retrying...`);
+            return;
+          }
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let buf = "";
@@ -552,6 +555,18 @@ export default function Home() {
             buf += decoder.decode(value, { stream: true });
             const chunks = buf.split("\n\n");
             for (const chunk of chunks) {
+              if (chunk.includes("event: error") && chunk.includes("data:")) {
+                const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+                if (line && !cancelled) {
+                  try {
+                    const errObj = JSON.parse(line.slice(5).trim());
+                    setSuggestion(`Model error: ${errObj.error?.slice(0, 200) || "unknown"}. Retrying...`);
+                  } catch {
+                    setSuggestion("Model error. Retrying...");
+                  }
+                }
+                return;
+              }
               if (chunk.includes("event: insight") && chunk.includes("data:")) {
                 const line = chunk.split("\n").find((l) => l.startsWith("data:"));
                 if (line) {
@@ -568,8 +583,10 @@ export default function Home() {
             }
           }
         }
-      } catch {}
-    }, 1000);
+      } catch (err: any) {
+        if (!cancelled) setSuggestion(`Connection error. Retrying...`);
+      }
+    }, 3000);
     return () => {
       cancelled = true;
       clearInterval(iv);
@@ -863,6 +880,7 @@ export default function Home() {
                 data-testid="consent-enable"
                 onClick={async () => {
                   setConsented(true);
+                  setSuggestion("Connecting to AI model...");
                   await start();
                 }}
               >
