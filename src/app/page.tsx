@@ -822,6 +822,72 @@ export default function Home() {
                 </div>
               </div>
 
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+                <div className="mb-1 text-sm font-semibold tracking-tight text-slate-900">Session</div>
+                <div className="mb-3 text-xs text-slate-500">Live signals and sensors.</div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Mic</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      {consented && !paused ? "On" : "Off"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Camera</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Privacy</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${privacyMode === "cloud" ? "text-emerald-700" : privacyMode === "local" ? "text-blue-700" : "text-amber-700"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${privacyMode === "cloud" ? "bg-emerald-500" : privacyMode === "local" ? "bg-blue-500" : "bg-amber-500"}`} />
+                      {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Glasses</span>
+                    <span className={`flex items-center gap-1.5 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Off"}
+                    </span>
+                  </div>
+                  <div className="mt-1 border-t border-slate-100 pt-2">
+                    <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                      <span className="text-slate-600">Speaking</span>
+                      <span className="font-medium text-slate-900">{speakingSeconds}s</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Intensity</span>
+                    <span className="font-medium text-slate-900">{intensityPct}%</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Engagement</span>
+                    <span className="font-medium text-slate-900">{engagement}</span>
+                  </div>
+                  {sensorSample && (
+                    <div className="mt-1 border-t border-slate-100 pt-2">
+                      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sensors</div>
+                      <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                        <span className="text-slate-600">Head motion</span>
+                        <span className="font-medium text-slate-900">{sensorSample?.headMotion || "-"}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                        <span className="text-slate-600">Brightness</span>
+                        <span className="font-medium text-slate-900">{typeof sensorSample?.brightness === "number" ? sensorSample.brightness : "-"}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                        <span className="text-slate-600">Temp</span>
+                        <span className="font-medium text-slate-900">{typeof sensorSample?.temp === "number" ? sensorSample.temp : "-"}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {demoMode && (
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
                   <button className="w-full text-left text-sm font-semibold" onClick={()=>setShowDemo(v=>!v)}>
@@ -948,6 +1014,55 @@ export default function Home() {
                 <button className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50" onClick={closeApp}>
                   Close App
                 </button>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+              <div className="mb-1 text-sm font-semibold tracking-tight text-slate-900">Session</div>
+              <div className="mb-3 text-xs text-slate-500">Live signals and sensors.</div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Mic</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {consented && !paused ? "On" : "Off"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Camera</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Privacy</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${privacyMode === "cloud" ? "text-emerald-700" : privacyMode === "local" ? "text-blue-700" : "text-amber-700"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${privacyMode === "cloud" ? "bg-emerald-500" : privacyMode === "local" ? "bg-blue-500" : "bg-amber-500"}`} />
+                    {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Glasses</span>
+                  <span className={`flex items-center gap-1.5 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Off"}
+                  </span>
+                </div>
+                <div className="mt-1 border-t border-slate-100 pt-2">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-slate-600">Speaking</span>
+                    <span className="font-medium text-slate-900">{speakingSeconds}s</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Intensity</span>
+                  <span className="font-medium text-slate-900">{intensityPct}%</span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <span className="text-slate-600">Engagement</span>
+                  <span className="font-medium text-slate-900">{engagement}</span>
+                </div>
               </div>
             </div>
 
@@ -1090,96 +1205,8 @@ export default function Home() {
           </div>
         )}
 
-        <section className={`md:col-span-3 ${cardBase}`}>
-          <div className={cardTitleRow}>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Session</h3>
-              <div className="mt-1 text-xs text-slate-500">Live signals and device status.</div>
-            </div>
-          </div>
-
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Mic</span>
-                <span className={`flex items-center gap-1 font-medium ${consented && !paused ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {consented && !paused ? "On" : "Off"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Camera</span>
-                <span className={`flex items-center gap-1 font-medium ${consented ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {consented ? (cameraFacing === "user" ? "Front" : "Back") : "Off"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Privacy</span>
-                <span className="flex items-center gap-1 font-medium">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      privacyMode === "cloud"
-                        ? "bg-emerald-500"
-                        : privacyMode === "local"
-                        ? "bg-blue-500"
-                        : "bg-amber-500"
-                    }`}
-                  />
-                  {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Off"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <span className="text-slate-600">Glasses</span>
-                <span className={`flex items-center gap-1 font-medium ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {reconnecting ? "Reconnecting" : glassesConnected ? "Connected" : "Disconnected"}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Speaking time</span>
-              <span className="font-semibold text-slate-900">{speakingSeconds}s</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Intensity</span>
-              <span className="font-semibold text-slate-900">{intensityPct}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Engagement</span>
-              <span className="font-semibold text-slate-900">{engagement}</span>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="mb-2 text-xs font-semibold text-slate-700">Sensors</div>
-              <div className="space-y-1 text-xs text-slate-600">
-                <div className="flex items-center justify-between">
-                  <span>Head motion</span>
-                  <span className="font-medium text-slate-900">{sensorSample?.headMotion || "-"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Brightness</span>
-                  <span className="font-medium text-slate-900">{typeof sensorSample?.brightness === "number" ? sensorSample.brightness : "-"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Temp</span>
-                  <span className="font-medium text-slate-900">{typeof sensorSample?.temp === "number" ? sensorSample.temp : "-"}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-xs font-semibold text-slate-700">Glasses</div>
-              <div className={`text-xs font-semibold ${glassesConnected ? "text-emerald-700" : "text-slate-500"}`}>
-                {reconnecting ? "Reconnecting…" : glassesConnected ? "Connected" : "Not connected"}
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Live Suggestions only; camera runs in background */}
-        <section className={`md:col-span-9 ${cardBase}`}>
+        <section className={`md:col-span-12 ${cardBase}`}>
           <div className={cardTitleRow}>
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Live Suggestions</h3>
