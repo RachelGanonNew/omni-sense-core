@@ -35,7 +35,7 @@ export async function runAgentStep(input: AgentStepInput): Promise<AgentStepOutp
   const stats = sess?.stats || {};
 
   const schema = toolsSchemaSummary();
-  const modelName = process.env.GEMINI_MODEL || "gemini-3.0-pro";
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
