@@ -13,6 +13,8 @@ export default function Home() {
   const [consented, setConsented] = useState(false);
   const [paused, setPaused] = useState(false);
   const [levels, setLevels] = useState<Levels>({ rms: 0, speaking: false });
+  const levelsRef = useRef<Levels>({ rms: 0, speaking: false });
+  const levelsFlushRef = useRef<number>(0);
   const [speakingMs, setSpeakingMs] = useState(0);
   const [interruption, setInterruption] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string>(
@@ -101,7 +103,7 @@ export default function Home() {
   const speakingThreshold = 0.06; // heuristic
   const spikeFactor = 2.2; // interruption heuristic
 
-  const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur";
+  const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur will-change-auto [transform:translateZ(0)]";
   const cardTitleRow = "mb-4 flex items-start justify-between gap-3";
   const pillBase = "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium";
   const primaryBtn = "rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900";
@@ -440,13 +442,19 @@ export default function Home() {
 
     const prevSpeaking = lastSpeakingRef.current;
     const prevRms = lastRmsRef.current;
-    setLevels({ rms, speaking });
+    levelsRef.current = { rms, speaking };
+    // Throttle state updates to ~2/sec to prevent iPhone flickering
+    const now2 = Date.now();
+    if (now2 - levelsFlushRef.current > 500) {
+      levelsFlushRef.current = now2;
+      setLevels({ rms, speaking });
+    }
 
     if (startedAtRef.current == null) startedAtRef.current = performance.now();
     const now = performance.now();
 
-    if (!paused && speaking) {
-      setSpeakingMs((ms) => ms + 1000 / 30);
+    if (!paused && speaking && now2 - levelsFlushRef.current < 50) {
+      setSpeakingMs((ms) => ms + 500);
     }
 
     if (!prevSpeaking && speaking && prevRms > 0 && rms / (prevRms + 1e-6) > spikeFactor) {
