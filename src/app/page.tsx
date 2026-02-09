@@ -341,12 +341,12 @@ export default function Home() {
       } catch {}
     };
 
-    // Stagger: actions at 15s, planner at 45s, then repeat
-    const ivActions = window.setInterval(autoRun, 30000);
-    const ivPlanner = window.setInterval(autoPlanner, 45000);
+    // Stagger: actions at 90s, planner at 120s to stay within Gemini 3 Pro rate limits (~5 RPM)
+    const ivActions = window.setInterval(autoRun, 90000);
+    const ivPlanner = window.setInterval(autoPlanner, 120000);
     // Initial runs with delay
-    const t1 = setTimeout(autoRun, 5000);
-    const t2 = setTimeout(autoPlanner, 15000);
+    const t1 = setTimeout(autoRun, 20000);
+    const t2 = setTimeout(autoPlanner, 40000);
     return () => {
       cancelled = true;
       window.clearInterval(ivActions);
@@ -453,17 +453,23 @@ export default function Home() {
     rafRef.current = requestAnimationFrame(tick);
   }, [paused]);
 
-  // Poll or stream backend for concise suggestion (~1/sec)
+  // Poll backend for live suggestions with adaptive backoff
+  const pollDelayRef = useRef(15000);
   useEffect(() => {
     if (!consented || paused || demoMode) return;
     let cancelled = false;
-    const iv = setInterval(async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const BASE_DELAY = 15000;
+    const MAX_DELAY = 60000;
+
+    const poll = async () => {
       try {
+        const curLevels = levelsRef.current;
         const payload = {
           audioDynamics: {
-            intensityPct: Math.min(100, Math.round(levels.rms * 400)),
-            speaking: levels.speaking,
-            interruption: !!interruption,
+            intensityPct: Math.min(100, Math.round(curLevels.rms * 400)),
+            speaking: curLevels.speaking,
+            interruption: false,
           },
           visionHints: { scene: "meeting", sensors: sensorRef.current ? { ...sensorRef.current, engagement } : undefined },
           transcript: notes.slice(0, 220),
@@ -471,7 +477,7 @@ export default function Home() {
 
         // --- Temporal detectors (windowed over ~20s) ---
         const nowTs = Date.now();
-        detectBufRef.current.push({ t: nowTs, speaking: levels.speaking, intensity: levels.rms, engagement });
+        detectBufRef.current.push({ t: nowTs, speaking: curLevels.speaking, intensity: curLevels.rms, engagement });
         // keep last 20 seconds
         detectBufRef.current = detectBufRef.current.filter((p) => nowTs - p.t <= 20000);
         const last10 = detectBufRef.current.filter((p) => nowTs - p.t <= 10000);
@@ -489,16 +495,8 @@ export default function Home() {
           try {
             await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, at: nowTs, details: { info } }) });
           } catch {}
-          // Trigger autonomous agent step with concise observation
-          try {
-            const observation = {
-              detection: { kind, info, at: nowTs },
-              audio: { speaking: levels.speaking, rms: Number(levels.rms.toFixed(3)) },
-              sensors: sensorRef.current ? { ...sensorRef.current, engagement } : { engagement },
-              transcript: notes.slice(0, 160),
-            };
-            await fetch("/api/agent/act", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ observation, maxTools: 2 }) });
-          } catch {}
+          // Skip per-detection agent calls to conserve Gemini 3 Pro rate limits
+          // Background planner handles these observations on its own interval
 
           // Real-time coaching (cooldown 12s) only when allowed
           try {
@@ -535,63 +533,82 @@ export default function Home() {
           await emit("engagement_drop", `Low engagement ${disengaged}/8s`);
         }
 
-        // Stream mode is always ON in this build
-        if (true) {
-          const res = await fetch("/api/omnisense/analyze/stream", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          if (!res.ok || !res.body) {
+        const res = await fetch("/api/omnisense/analyze/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok || !res.body) {
+          // Back off on rate limit errors
+          if (res.status === 429) {
+            pollDelayRef.current = Math.min(MAX_DELAY, pollDelayRef.current * 2);
+            if (!cancelled) setSuggestion(`Rate limited. Backing off ${Math.round(pollDelayRef.current / 1000)}s...`);
+          } else {
             if (!cancelled) setSuggestion(`API error (${res.status}). Retrying...`);
-            return;
           }
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const chunks = buf.split("\n\n");
-            for (const chunk of chunks) {
-              if (chunk.includes("event: error") && chunk.includes("data:")) {
-                const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-                if (line && !cancelled) {
+          if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const chunks = buf.split("\n\n");
+          for (const chunk of chunks) {
+            if (chunk.includes("event: error") && chunk.includes("data:")) {
+              const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+              if (line && !cancelled) {
+                const errText = line.slice(5).trim();
+                if (errText.includes("429") || errText.includes("Too Many")) {
+                  pollDelayRef.current = Math.min(MAX_DELAY, pollDelayRef.current * 2);
+                  setSuggestion(`Rate limited. Backing off ${Math.round(pollDelayRef.current / 1000)}s...`);
+                } else {
                   try {
-                    const errObj = JSON.parse(line.slice(5).trim());
+                    const errObj = JSON.parse(errText);
                     setSuggestion(`Model error: ${errObj.error?.slice(0, 200) || "unknown"}. Retrying...`);
                   } catch {
                     setSuggestion("Model error. Retrying...");
                   }
                 }
-                return;
               }
-              if (chunk.includes("event: insight") && chunk.includes("data:")) {
-                const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-                if (line) {
-                  const json = line.slice(5).trim();
-                  try {
-                    const obj = JSON.parse(json);
-                    const tip = obj?.action_recommendation || obj?.analysis || obj?.observation;
-                    if (!cancelled && tip) setSuggestion(String(tip).slice(0, 700));
-                    await reader.cancel();
-                    return;
-                  } catch {}
-                }
+              if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
+              return;
+            }
+            if (chunk.includes("event: insight") && chunk.includes("data:")) {
+              const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+              if (line) {
+                const json = line.slice(5).trim();
+                try {
+                  const obj = JSON.parse(json);
+                  const tip = obj?.action_recommendation || obj?.analysis || obj?.observation;
+                  if (!cancelled && tip) setSuggestion(String(tip).slice(0, 700));
+                  // Success — reset backoff to base
+                  pollDelayRef.current = BASE_DELAY;
+                  await reader.cancel();
+                  if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
+                  return;
+                } catch {}
               }
             }
           }
         }
+        // Stream ended without insight — schedule next poll
+        if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
       } catch (err: any) {
         if (!cancelled) setSuggestion(`Connection error. Retrying...`);
+        if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
       }
-    }, 3000);
+    };
+
+    timer = setTimeout(poll, 1000);
     return () => {
       cancelled = true;
-      clearInterval(iv);
+      clearTimeout(timer);
     };
-  }, [consented, paused, demoMode, levels.rms, levels.speaking, interruption, notes, outputMode]);
+  }, [consented, paused, demoMode, notes, outputMode]);
 
   // Load current backend context on component mount
   useEffect(() => {
