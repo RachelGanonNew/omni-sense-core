@@ -76,3 +76,19 @@ Live URL: https://omnisense-orchestrator.vercel.app
    - If GOOGLE_API_KEY + GOOGLE_CSE_ID set: web.search tool results include Google CSE summaries.
    - Otherwise falls back to Wikipedia summaries.
 
+---
+
+## Hackathon Submission Text (copy/paste)
+
+**What we built (short description)**  
+OmniSense is a **live social translator** that listens through mic, camera, and AI glasses, explains the room’s social subtext in four lines, and then uses a **Gemini 3‑powered agent** to handle all the follow‑ups. It is not a chat wrapper: it is a tool‑calling orchestrator with long‑term memory, policies, and verification.
+
+**Strategic track fit**  
+- **🧠 Marathon Agent** – Planner + Action Queue + long‑term memory form a background agent that keeps drafting goals, creating tasks, and maintaining continuity across days of interactions.  
+- **👨‍🏫 Real‑Time Teacher** – Live mic/cam + glasses sensors drive streaming “social translation” for classrooms and meetings: The Vibe, Hidden Meaning, Social Red Flags, and The Social Script.  
+- **☯️ Vibe Engineering** – Thought signatures, verification tools (`agent.verify_step`), synthetic eval (`/api/evaluate`), and HTML audit artifacts build a self‑evaluation loop that measures and improves behavior over time.
+
+**How we use Gemini 3 (≈200 words)**  
+OmniSense uses Gemini 3 Pro as a **tool-calling orchestrator**, not a simple chat wrapper. For live “social translation”, the browser streams lightweight observations (RMS intensity, speaking state, interruptions, glasses sensor cues, short transcript snippets) to `/api/omnisense/analyze/stream`. The server builds a rich prompt that combines system instruction, user preferences, long-context assembly, and a long‑term memory snippet. Gemini 3 Pro returns a structured JSON object with a four-line script: The Vibe, The Hidden Meaning, Social Red Flags, The Social Script. A second Gemini call self-scores clarity, actionability, and safety, feeding a confidence bar and conservative/proactive tuning.  
+For the **Marathon Agent**, `/api/agent/run` calls `runAgentStep`, which provides Gemini 3 with tool schemas (`web.search`, `calendar.create_event`, `memory.write`, `tasks.create`, `tasks.update_status`, `notes.write`, `agent.verify_step`) plus long-term memory and preferences. Gemini proposes tool_calls; the server executes them, logs thought signatures, and writes verification records. `/api/evaluate` uses Gemini to synthesize diverse scenarios and rubric-score OmniSense’s outputs across four competencies, producing quantitative reliability metrics. Together, this architecture showcases Gemini 3 Pro’s long context, multimodal reasoning, structured outputs, and agentic tool calling in a way that is self-evaluating and ready for real-world social coaching.
+
