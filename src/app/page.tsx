@@ -18,25 +18,8 @@ export default function Home() {
   const [speakingMs, setSpeakingMs] = useState(0);
   const [interruption, setInterruption] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string>(
-    "Analyzing micro-expressions..."
+    "The Leak: Waiting for input — no live context yet.\nThe Fix: Enable mic and camera to start.\nThe Vibe: Relaxed, ready."
   );
-
-  // Filming: show hardcoded result after 30s delay, then speak the tactical script
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSuggestion("The Reality: The Micro-Expression Gap occurs at 0:01; his brow furrows in genuine bewilderment for a fraction of a second before the \"hostage smile\" is applied.\nTactical Script: \"I saw that first reaction—you don't have to perform for me, I know it's a confusing gift.\"\nThe Move: Lean back and laugh to signal that the \"polite lie\" is no longer necessary.");
-      // Speak the tactical script line
-      try {
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance("I saw that first reaction — you don't have to perform for me, I know it's a confusing gift.");
-          u.rate = 0.95;
-          window.speechSynthesis.speak(u);
-        }
-      } catch {}
-    }, 30000);
-    return () => clearTimeout(t);
-  }, []);
   const [notes, setNotes] = useState("");
   const [notesIsDraft, setNotesIsDraft] = useState(false);
   const [summary, setSummary] = useState<string>("");
@@ -110,7 +93,8 @@ export default function Home() {
   const bridgeRef = useRef<GlassesBridge | null>(null);
 
   const speakingThreshold = 0.06; // heuristic
-  const spikeFactor = 2.2; // interruption heuristic
+  const spikeFactor = 5.0; // interruption heuristic — raised to reduce false positives
+  const interruptCooldownRef = useRef<number>(0);
 
   const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur will-change-auto [transform:translateZ(0)]";
   const cardTitleRow = "mb-4 flex items-start justify-between gap-3";
@@ -466,9 +450,10 @@ export default function Home() {
       setSpeakingMs((ms) => ms + 500);
     }
 
-    if (!prevSpeaking && speaking && prevRms > 0 && rms / (prevRms + 1e-6) > spikeFactor) {
+    if (!prevSpeaking && speaking && prevRms > 0.02 && rms / prevRms > spikeFactor && now2 - interruptCooldownRef.current > 10000) {
+      interruptCooldownRef.current = now2;
       setInterruption("Possible interruption detected");
-      setTimeout(() => setInterruption(null), 1500);
+      setTimeout(() => setInterruption(null), 3000);
     }
 
     lastSpeakingRef.current = speaking;
