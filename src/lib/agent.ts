@@ -41,7 +41,36 @@ export async function runAgentStep(input: AgentStepInput): Promise<AgentStepOutp
 
   const longCtx = assembleLongContext();
   const longMemory = await buildLongMemorySnippet({ preferences: prefs, limit: 24, maxChars: 2200 });
-  const prompt = `${systemInstruction}
+
+  // Detect if this is a Planner goal-execution call vs a live social-translation call
+  const goalText = input.observation?.goal;
+  const isGoalMode = typeof goalText === "string" && goalText.length > 0;
+
+  const prompt = isGoalMode
+    ? `You are OmniSense Planner — an autonomous goal-execution agent.
+
+GOAL: ${goalText}
+STEP INDEX: ${input.observation?.step_index ?? 0}
+
+YOUR JOB: Break the goal into concrete actions and execute them using the TOOLS below.
+- Think step-by-step about what needs to happen to accomplish the goal.
+- Use tools to search the web, create tasks, write notes, create calendar events, and verify your work.
+- After executing tools, provide a clear, actionable summary of what you accomplished.
+
+OUTPUT CONTRACT (STRICT): Return ONLY JSON with keys:
+- thoughts: your step-by-step reasoning (1-3 sentences)
+- tool_calls: array of { name, args } from TOOLS below (use at least 1 tool when possible)
+- final: a clear, helpful summary of what was done or found (plain text, 2-6 sentences). Do NOT use the "The Vibe / Hidden Meaning / Red Flags / Social Script" format. Write a direct, useful answer.
+
+TOOLS (JSON schema summary):\n${JSON.stringify(schema)}
+
+CONTEXT:
+- Preferences: ${JSON.stringify(prefs)}
+- Stats: ${JSON.stringify(stats)}
+- LongContext: ${longCtx}
+- LongTermMemory:\n${longMemory || "(none)"}
+`
+    : `${systemInstruction}
 
 IMPORTANT: Ignore any output-format requirements above. Follow the OUTPUT CONTRACT below exactly.
 
@@ -99,15 +128,15 @@ INPUTS:
     agentAddEvent("system", { kind: "agent.error", details: { where: "runAgentStep.generateContent", error: String(lastErr?.message || lastErr) } });
     try { await executeTool({ name: "agent.verify_step", args: { claim: "Model call failed after retries", evidence: "generateContent", pass: false } }); } catch {}
     // Return a user-facing explanation while keeping the run consistent.
-    // Keep the 4-line contract so downstream UI stays stable.
     return JSON.stringify({
       thoughts: "Gemini API unreachable; returning fallback response.",
       tool_calls: [],
-      final:
-        "The Vibe: AI temporarily offline.\n" +
-        "The Hidden Meaning: Gemini API call failed.\n" +
-        "Social Red Flags: Check key/quota/network.\n" +
-        "The Social Script: Retry; verify GEMINI_API_KEY.",
+      final: isGoalMode
+        ? "Could not complete the goal — Gemini API call failed. Please check your API key, quota, and network, then retry."
+        : "The Vibe: AI temporarily offline.\n" +
+          "The Hidden Meaning: Gemini API call failed.\n" +
+          "Social Red Flags: Check key/quota/network.\n" +
+          "The Social Script: Retry; verify GEMINI_API_KEY.",
     });
   }
 
