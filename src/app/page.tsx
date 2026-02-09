@@ -365,7 +365,7 @@ export default function Home() {
     return () => window.clearInterval(iv);
   }, [runStartedAt]);
 
-  // Demo Mode: scripted showcase without requiring camera/mic
+  // Demo Mode: scripted showcase without requiring camera/mic — progressive reveal for judges
   useEffect(() => {
     if (demoMode) {
       suggestionBeforeDemoRef.current = suggestion;
@@ -376,38 +376,91 @@ export default function Home() {
 
       const demoTips = [
         "The Leak: They're teasing, not literally criticizing — words and tone don't match.\nThe Fix: Laugh it off and say: 'Haha fair — what would you do instead?'\nThe Vibe: Playful grin, lean back.",
+        "The Leak: His brow furrows in genuine bewilderment before the \"hostage smile\" kicks in — he doesn't understand the gift.\nThe Fix: Say: 'I saw that first reaction — you don't have to perform for me, I know it's a confusing gift.'\nThe Vibe: Lean back, laugh, open palms.",
         "The Leak: Short replies and impatient tone — they want this wrapped up fast.\nThe Fix: Say: 'Got it — what's the one thing you need from me right now?'\nThe Vibe: Direct eye contact, calm nod.",
         "The Leak: Overly polite wording is masking condescension — they're testing your boundaries.\nThe Fix: Say: 'I appreciate that — let's cut to what you actually need.'\nThe Vibe: Steady posture, slight smile.",
+        "The Leak: Nervous laughter + fidgeting — they're uncomfortable but don't want to say it.\nThe Fix: Say: 'Hey, no pressure at all — we can totally skip this if it's not your thing.'\nThe Vibe: Soft voice, step back slightly.",
       ];
 
       const now = Date.now();
-      setDetections([
-        { t: now, kind: "Sarcasm likely", info: "Words and tone don't match" },
-        { t: now - 7000, kind: "Pressure", info: "Short replies, impatient tone" },
-        { t: now - 14000, kind: "Condescending", info: "Overly polite wording" },
-      ]);
 
-      // Populate Background Intel with demo data
-      setActionQueue([
-        { id: "demo-1", type: "calendar", title: "Dinner with Alex — Saturday 7pm", description: "Detected from conversation: 'Let's grab dinner Saturday evening'", confidence: 0.92, status: "executed", executedAt: now, data: { date: "2026-02-14", time: "19:00" } },
-        { id: "demo-2", type: "task", title: "Send Sarah the article about AI glasses", description: "Commitment detected: 'I'll send you that link later'", confidence: 0.85, status: "executed", executedAt: now - 5000 },
-        { id: "demo-3", type: "email", title: "Follow up with Jordan re: project timeline", description: "Action item from earlier: 'We need to sync on deadlines'", confidence: 0.78, status: "executed", executedAt: now - 12000, data: { to: "jordan@example.com", subject: "Project timeline sync", body: "Hey Jordan — following up on our chat. Want to lock in deadlines this week. When works for you?" } },
-        { id: "demo-4", type: "task", title: "Book flights for March trip", description: "Mentioned twice in conversation — flagged as high priority", confidence: 0.88, status: "executed", executedAt: now - 20000 },
-      ]);
-      setPlannerTasks([
-        { id: "demo-plan-1", goal: "Auto-detected from conversation", status: "done" as const, result: "Plan detected: Saturday dinner with Alex at 7pm.\nSuggestion: Book a table at the Italian place you both liked last time. Mention the new dessert menu — Alex has a sweet tooth.", startedAt: now - 30000, finishedAt: now - 25000 },
-        { id: "demo-plan-2", goal: "Auto-detected from conversation", status: "done" as const, result: "Upcoming: Jordan seems stressed about the project deadline.\nAdvice: Lead with empathy — ask how they're doing before jumping into logistics. Offer to take one task off their plate.", startedAt: now - 60000, finishedAt: now - 55000 },
-      ]);
-      setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.\nSarah asked about AI glasses article from last week.");
+      // Start with just the first suggestion and notes — then progressively add intel
+      setSuggestion(demoTips[0]);
+      setDetections([{ t: now, kind: "Sarcasm likely", info: "Words and tone don't match" }]);
+      setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.");
+      setActionQueue([]);
+      setPlannerTasks([]);
 
-      let i = 0;
-      setSuggestion(demoTips[i]);
+      const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+      // 3s: first action appears
+      timeouts.push(setTimeout(() => {
+        setActionQueue([
+          { id: "demo-1", type: "calendar", title: "Dinner with Alex — Saturday 7pm", description: "Detected from conversation: 'Let's grab dinner Saturday evening'", confidence: 0.92, status: "executed", executedAt: Date.now(), data: { date: "2026-02-14", time: "19:00" } },
+        ]);
+      }, 3000));
+
+      // 6s: second tip + detection + more notes
+      timeouts.push(setTimeout(() => {
+        setSuggestion(demoTips[1]);
+        setDetections((d) => [{ t: Date.now(), kind: "Micro-expression gap", info: "Bewilderment before forced smile" }, ...d]);
+        setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.");
+      }, 6000));
+
+      // 10s: planner result + second action
+      timeouts.push(setTimeout(() => {
+        setPlannerTasks([
+          { id: "demo-plan-1", goal: "Auto-detected from conversation", status: "done" as const, result: "Plan detected: Saturday dinner with Alex at 7pm.\nSuggestion: Book a table at the Italian place you both liked last time. Mention the new dessert menu — Alex has a sweet tooth.", startedAt: Date.now() - 5000, finishedAt: Date.now() },
+        ]);
+        setActionQueue((prev) => [
+          { id: "demo-2", type: "task", title: "Send Sarah the article about AI glasses", description: "Commitment detected: 'I'll send you that link later'", confidence: 0.85, status: "executed", executedAt: Date.now() },
+          ...prev,
+        ]);
+      }, 10000));
+
+      // 14s: third tip + detection
+      timeouts.push(setTimeout(() => {
+        setSuggestion(demoTips[2]);
+        setDetections((d) => [{ t: Date.now(), kind: "Pressure", info: "Short replies, impatient tone" }, ...d]);
+      }, 14000));
+
+      // 18s: email action + second planner insight
+      timeouts.push(setTimeout(() => {
+        setActionQueue((prev) => [
+          { id: "demo-3", type: "email", title: "Follow up with Jordan re: project timeline", description: "Action item: 'We need to sync on deadlines'", confidence: 0.78, status: "executed", executedAt: Date.now(), data: { to: "jordan@example.com", subject: "Project timeline sync", body: "Hey Jordan — following up on our chat. Want to lock in deadlines this week. When works for you?" } },
+          ...prev,
+        ]);
+        setPlannerTasks((prev) => [
+          { id: "demo-plan-2", goal: "Auto-detected from conversation", status: "done" as const, result: "Upcoming: Jordan seems stressed about the project deadline.\nAdvice: Lead with empathy — ask how they're doing before jumping into logistics. Offer to take one task off their plate.", startedAt: Date.now() - 5000, finishedAt: Date.now() },
+          ...prev,
+        ]);
+        setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.\nSarah asked about AI glasses article from last week.\nMentioned booking flights for March trip twice — flagged as high priority.");
+      }, 18000));
+
+      // 22s: fourth tip + task action
+      timeouts.push(setTimeout(() => {
+        setSuggestion(demoTips[3]);
+        setDetections((d) => [{ t: Date.now(), kind: "Condescending tone", info: "Overly polite wording masking intent" }, ...d]);
+        setActionQueue((prev) => [
+          { id: "demo-4", type: "task", title: "Book flights for March trip", description: "Mentioned twice in conversation — flagged as high priority", confidence: 0.88, status: "executed", executedAt: Date.now() },
+          ...prev,
+        ]);
+      }, 22000));
+
+      // 28s+: cycle remaining tips
+      let tipIdx = 4;
       if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
       demoIntervalRef.current = window.setInterval(() => {
-        i = (i + 1) % demoTips.length;
-        setSuggestion(demoTips[i]);
-      }, 6000);
-      return;
+        setSuggestion(demoTips[tipIdx % demoTips.length]);
+        tipIdx++;
+      }, 8000);
+      // Start the cycling after the scripted sequence
+      const cycleStart = setTimeout(() => {}, 28000);
+      timeouts.push(cycleStart);
+
+      return () => {
+        timeouts.forEach(clearTimeout);
+      };
     }
 
     if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
