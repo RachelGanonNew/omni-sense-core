@@ -280,16 +280,15 @@ export default function Home() {
     };
   }, [consented, paused, demoMode, privacyMode, autoRunGoal, autoNotes]);
 
-  // Autonomous mode: auto-generate and auto-execute actions on an interval
+  // Background Intel: always-on auto-generate and auto-execute actions
   useEffect(() => {
-    if (!autonomousMode || !consented || paused || demoMode || privacyMode === "off") return;
+    if (!consented || paused || demoMode || privacyMode === "off") return;
     let cancelled = false;
 
     const autoRun = async () => {
       if (cancelled || actionQueueLoading) return;
       try {
         setActionQueueLoading(true);
-        setActionQueueMsg("Auto-analyzing...");
         const res = await fetch("/api/omnisense/autonomous-execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -301,28 +300,61 @@ export default function Home() {
         });
         const j = await res.json();
         if (cancelled) return;
-        if (!res.ok) { setActionQueueMsg(`Error: ${j?.error || "failed"}`); return; }
-        const actions = j.actions || [];
-        // Auto-execute all proposed actions immediately
-        const executed = actions.map((a: any) => ({ ...a, status: "executed", executedAt: Date.now() }));
-        setActionQueue(executed);
-        setActionQueueMsg(`${executed.length} actions auto-executed`);
-        setShowActionQueue(true);
-      } catch (e: any) {
-        if (!cancelled) setActionQueueMsg(`Error: ${e?.message || String(e)}`);
-      } finally {
+        if (!res.ok) return;
+        const newActions = j.actions || [];
+        const executed = newActions.map((a: any) => ({ ...a, status: "executed", executedAt: Date.now() }));
+        setActionQueue((prev) => [...executed, ...prev].slice(0, 20));
+        setActionQueueMsg(executed.length ? `${executed.length} new intel` : "");
+      } catch {} finally {
         if (!cancelled) setActionQueueLoading(false);
       }
     };
 
-    // Run once immediately, then every 30s
-    autoRun();
-    const iv = window.setInterval(autoRun, 30000);
+    // Auto-detect goals from transcript and run planner silently
+    const autoPlanner = async () => {
+      if (cancelled) return;
+      const transcript = notes.slice(0, 500);
+      if (!transcript || transcript.length < 20) return;
+      try {
+        const res = await fetch("/api/agent/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            goal: `From this conversation, detect any plans, commitments, or action items and organize them: "${transcript.slice(0, 300)}"`,
+            steps: 2,
+            maxTools: 2,
+          }),
+        });
+        const j = await res.json();
+        if (cancelled || !res.ok) return;
+        const result = j?.steps?.map((s: any) => s?.final || "").filter(Boolean).join("\n") || "";
+        if (result) {
+          setPlannerTasks((prev) => [{
+            id: `auto-${Date.now()}`,
+            goal: "Auto-detected from conversation",
+            status: "done" as const,
+            result: String(result),
+            startedAt: Date.now() - 5000,
+            finishedAt: Date.now(),
+          }, ...prev].slice(0, 10));
+        }
+      } catch {}
+    };
+
+    // Stagger: actions at 15s, planner at 45s, then repeat
+    const ivActions = window.setInterval(autoRun, 30000);
+    const ivPlanner = window.setInterval(autoPlanner, 45000);
+    // Initial runs with delay
+    const t1 = setTimeout(autoRun, 5000);
+    const t2 = setTimeout(autoPlanner, 15000);
     return () => {
       cancelled = true;
-      window.clearInterval(iv);
+      window.clearInterval(ivActions);
+      window.clearInterval(ivPlanner);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
-  }, [autonomousMode, consented, paused, demoMode, privacyMode]);
+  }, [consented, paused, demoMode, privacyMode]);
 
   useEffect(() => {
     if (!runStartedAt) return;
@@ -861,10 +893,6 @@ export default function Home() {
                     <span className="text-slate-700">Privacy</span>
                     <input type="checkbox" checked={privacyMode !== "off"} onChange={async (e)=>{ const v = e.target.checked ? "cloud" : "off"; setPrivacyMode(v as any); try { await fetch("/api/omnisense/context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { privacyMode: v } }) }); } catch {} }} className="h-4 w-4 rounded-md border-2 border-indigo-400 bg-gradient-to-br from-indigo-500 to-purple-600" />
                   </label>
-                  <label className="flex items-center justify-between gap-3">
-                    <span className="text-slate-700">Autonomous</span>
-                    <input type="checkbox" checked={autonomousMode} onChange={() => setAutonomousMode((v) => !v)} className="h-4 w-4 rounded-md border-2 border-amber-400 bg-gradient-to-br from-amber-500 to-orange-600" />
-                  </label>
                   <button className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium shadow-sm hover:bg-slate-50 ${glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"}`} onClick={()=>{ if (glassesConnected) setGlassesConnected(false); else setShowGlassesModal(true); }} title="Connect AI Glasses (simulated)">{glassesConnected?"Glasses Connected":"Connect Glasses"}</button>
                   <button className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={closeApp}>Close App</button>
                 </div>
@@ -1048,11 +1076,6 @@ export default function Home() {
                   />
                 </label>
 
-                <label className="flex items-center justify-between gap-3">
-                  <span className="text-slate-700">Autonomous</span>
-                  <input type="checkbox" checked={autonomousMode} onChange={() => setAutonomousMode((v) => !v)} className="h-4 w-4 rounded-md border-2 border-amber-400 bg-gradient-to-br from-amber-500 to-orange-600" />
-                </label>
-
                 <button
                   className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 ${
                     glassesConnected ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-900"
@@ -1155,7 +1178,7 @@ export default function Home() {
                 <button className="rounded-lg bg-white/15 px-2 py-1.5 text-white hover:bg-white/25 md:hidden" onClick={() => setMobileSidebarOpen(true)}>≡</button>
                 <h1 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">OmniSense</h1>
               </div>
-              <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Live social translator · Gemini 3 Pro</p>
+              <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Real-time social intelligence · Always listening, always ready</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
@@ -1274,364 +1297,95 @@ export default function Home() {
           <video ref={videoRef} className="hidden h-[1px] w-[1px]" muted playsInline />
         </section>
 
-        
-
+        {/* Background Intel — unified auto-planner, actions, and notes */}
         <section className={`md:col-span-12 ${cardBase}`}>
           <div className={cardTitleRow}>
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Planner</h3>
-              <div className="mt-1 text-xs text-slate-500">Draft a goal and execute when you’re ready.</div>
+              <h3 className="text-lg font-semibold text-slate-900">Background Intel</h3>
+              <div className="mt-1 text-xs text-slate-500">Auto-collected plans, actions, and insights from your conversation.</div>
             </div>
             <div className="flex items-center gap-2">
-              {runStartedAt != null && (
+              {actionQueueLoading && (
                 <div className={`${pillBase} border-indigo-200 bg-indigo-50 text-indigo-800`}>
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-                  <span>Working</span>
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
+                  <span>Listening</span>
                 </div>
               )}
-              <div className={`${pillBase} ${autoRunGoal ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
-                <span>{autoRunGoal ? "Auto" : "Manual"}</span>
-              </div>
+              {(actionQueue.length > 0 || plannerTasks.length > 0) && (
+                <span className="text-xs text-slate-500">{actionQueue.length + plannerTasks.length} items</span>
+              )}
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              className={`flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-300 ${runGoalIsDraft ? "text-slate-400" : "text-slate-900"}`}
-              placeholder="Goal (e.g., Prepare follow-up plan for the meeting)"
-              value={runGoal}
-              onFocus={(e) => {
-                if (runGoalIsDraft) {
-                  try {
-                    (e.target as HTMLInputElement).select();
-                  } catch {}
-                }
-              }}
-              onChange={(e) => {
-                lastRunGoalEditRef.current = Date.now();
-                setAutoRunGoal(false);
-                const next = e.target.value;
-                if (runGoalIsDraft) setRunGoalIsDraft(false);
-                setRunGoal(next);
-                if (!next.trim()) {
-                  setRunResult("");
-                  setRunStatus("");
-                  setRunStartedAt(null);
-                  setRunGoalIsDraft(false);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  runPlannerGoal();
-                }
-              }}
-            />
-            {!autoRunGoal && (
-              <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoRunGoal(true)}>
-                Resume auto
-              </button>
-            )}
-            <button
-              className={primaryBtn}
-              disabled={!runGoal.trim() || runStartedAt != null}
-              onClick={() => runPlannerGoal()}
-            >
-              Run
-            </button>
-          </div>
-          {runStatus && <div className="text-xs text-slate-500">{runStatus} (elapsed {runElapsedSec}s, ETA ~10–30s)</div>}
-          {runResult && <div className="whitespace-pre-line text-xs text-slate-500">{runResult}</div>}
 
+          {/* Empty state */}
+          {actionQueue.length === 0 && plannerTasks.length === 0 && !actionQueueLoading && (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm text-slate-500">
+              Listening for plans, commitments, and action items in your conversation...
+            </div>
+          )}
+
+          {/* Auto-detected planner insights */}
           {plannerTasks.length > 0 && (
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-800">Task History</div>
-                <button className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setPlannerTasks([])}>Clear</button>
+            <div className="mb-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Detected Plans</div>
+                <button className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setPlannerTasks([])}>Clear</button>
               </div>
-              <div className="space-y-2">
-                {plannerTasks.slice(0, 20).map((task) => (
-                  <div key={task.id} className={`rounded-xl border p-3 text-sm ${task.status === "running" ? "border-indigo-200 bg-indigo-50/50" : task.status === "done" ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/50"}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 font-medium text-slate-900">
-                        {task.status === "running" && <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />}
-                        {task.status === "done" && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
-                        {task.status === "error" && <span className="h-2 w-2 rounded-full bg-red-500" />}
-                        <span className="truncate">{task.goal}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                          task.status === "running" ? "bg-indigo-100 text-indigo-700" :
-                          task.status === "done" ? "bg-emerald-100 text-emerald-700" :
-                          "bg-red-100 text-red-700"
-                        }`}>{task.status}</span>
-                        <span>{task.finishedAt ? `${((task.finishedAt - task.startedAt) / 1000).toFixed(1)}s` : `${Math.floor((Date.now() - task.startedAt) / 1000)}s`}</span>
-                      </div>
-                    </div>
-                    {task.status !== "running" && task.result && (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Show result</summary>
-                        <div className="mt-1 whitespace-pre-line rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">{task.result}</div>
-                      </details>
-                    )}
-                    {task.status === "error" && (
-                      <button className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" onClick={() => runPlannerGoal(task.goal)}>Retry</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Autonomous Action Log */}
-        {autonomousMode && (
-          <section className={`md:col-span-12 ${cardBase}`}>
-            <div className={cardTitleRow}>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Autonomous Actions</h3>
-                <div className="mt-1 text-xs text-slate-500">Auto-generated and executed from live meeting context.</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {actionQueueLoading && <span className="text-xs text-slate-500">Analyzing...</span>}
-                <button className={`${secondaryBtn} text-xs`} onClick={() => loadContinuity("review")}>
-                  Session Review
-                </button>
-              </div>
-            </div>
-            {actionQueueMsg && <div className="mb-3 text-xs text-slate-500">{actionQueueMsg}</div>}
-            {actionQueue.length > 0 && (
-              <div className="space-y-2">
-                {actionQueue.map((action) => (
-                  <div key={action.id} className={`rounded-xl border p-4 text-sm shadow-sm ${action.status === "executed" ? "border-emerald-200 bg-emerald-50/50" : action.status === "failed" ? "border-red-200 bg-red-50/50" : "border-slate-200 bg-white"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                            action.type === "calendar" ? "bg-blue-100 text-blue-700" :
-                            action.type === "email" ? "bg-purple-100 text-purple-700" :
-                            action.type === "task" ? "bg-amber-100 text-amber-700" :
-                            action.type === "document" ? "bg-slate-100 text-slate-700" :
-                            "bg-emerald-100 text-emerald-700"
-                          }`}>{action.type}</span>
-                          <span className="font-medium text-slate-900">{action.title}</span>
-                        </div>
-                        <div className="mt-1 text-xs text-slate-600">{action.description}</div>
-                        <div className="mt-2 flex items-center gap-3 text-xs">
-                          <div className="flex items-center gap-1">
-                            <span className="text-slate-500">Confidence:</span>
-                            <div className="h-1.5 w-16 rounded-full bg-slate-200">
-                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${action.confidence * 100}%` }} />
-                            </div>
-                            <span className="font-medium">{(action.confidence * 100).toFixed(0)}%</span>
-                          </div>
-                          {action.status === "executed" && <span className="font-medium text-emerald-700">Executed</span>}
-                          {action.status === "failed" && <span className="font-medium text-red-700">Failed: {action.error}</span>}
-                        </div>
-                        {action.type === "email" && action.data?.body && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Preview email</summary>
-                            <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
-                              <div className="font-medium">To: {action.data.to}</div>
-                              <div className="font-medium">Subject: {action.data.subject}</div>
-                              <div className="mt-2 whitespace-pre-line text-slate-700">{action.data.body}</div>
-                            </div>
-                          </details>
-                        )}
-                        {action.type === "document" && action.data?.sections && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">Preview document</summary>
-                            <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
-                              {action.data.sections.map((s: any, si: number) => (
-                                <div key={si} className="mb-2">
-                                  <div className="font-semibold">{s.heading}</div>
-                                  <ul className="ml-4 list-disc">{(s.items || []).map((item: string, ii: number) => <li key={ii}>{item}</li>)}</ul>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {action.status === "executed" && action.type === "calendar" && action.data?.date && (
-                          <a className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
-                            Open Calendar
-                          </a>
-                        )}
-                        {action.status === "executed" && !action.userRating && (
-                          <div className="flex items-center gap-1">
-                            <button className="rounded border border-slate-200 px-1.5 py-0.5 text-xs hover:bg-emerald-50" onClick={() => rateAction(action.id, "up")} title="Correct">👍</button>
-                            <button className="rounded border border-slate-200 px-1.5 py-0.5 text-xs hover:bg-red-50" onClick={() => rateAction(action.id, "down")} title="Incorrect">👎</button>
-                          </div>
-                        )}
-                        {action.userRating && (
-                          <span className={`text-xs font-medium ${action.userRating === "up" ? "text-emerald-600" : "text-red-600"}`}>
-                            {action.userRating === "up" ? "Verified ✓" : "Corrected"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Continuity / Session Review Panel */}
-        {showContinuity && (
-          <section className={`md:col-span-12 ${cardBase}`}>
-            <div className={cardTitleRow}>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Session Continuity</h3>
-                <div className="mt-1 text-xs text-slate-500">Cross-session tracking, patterns, and proactive reminders.</div>
-              </div>
-              <button className={secondaryBtn} onClick={() => setShowContinuity(false)}>Close</button>
-            </div>
-            {!continuityData && <div className="text-xs text-slate-500">Loading...</div>}
-            {continuityData?.error && <div className="text-xs text-red-600">{continuityData.error}</div>}
-            {continuityData && !continuityData.error && (
-              <div className="space-y-4 text-sm">
-                {continuityData.summary && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-slate-700">Summary</div>
-                    <div className="text-slate-800">{continuityData.summary}</div>
-                  </div>
-                )}
-                {continuityData.goalProgress && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-slate-700">Goal Progress</div>
-                    <div className="text-slate-800">{continuityData.goalProgress}</div>
-                  </div>
-                )}
-                {Array.isArray(continuityData.patterns) && continuityData.patterns.length > 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-amber-800">Recurring Patterns</div>
-                    <ul className="ml-4 list-disc text-xs text-amber-900">{continuityData.patterns.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul>
-                  </div>
-                )}
-                {Array.isArray(continuityData.reminders) && continuityData.reminders.length > 0 && (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-blue-800">Proactive Reminders</div>
-                    <ul className="ml-4 list-disc text-xs text-blue-900">{continuityData.reminders.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul>
-                  </div>
-                )}
-                {Array.isArray(continuityData.recommendations) && continuityData.recommendations.length > 0 && (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
-                    <div className="mb-1 text-xs font-semibold text-emerald-800">Recommendations</div>
-                    <ul className="ml-4 list-disc text-xs text-emerald-900">{continuityData.recommendations.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul>
-                  </div>
-                )}
-                {continuityData.feedback && (
-                  <div className="flex items-center gap-4 text-xs text-slate-600">
-                    <span>Feedback: {continuityData.feedback.total} ratings</span>
-                    <span>Accuracy: {(continuityData.feedback.accuracy * 100).toFixed(0)}%</span>
-                    <span>👍 {continuityData.feedback.up} / 👎 {continuityData.feedback.down}</span>
-                  </div>
-                )}
-                {Array.isArray(continuityData.pendingTasks) && continuityData.pendingTasks.length > 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="mb-2 text-xs font-semibold text-slate-700">Pending Tasks</div>
-                    <div className="space-y-1">{continuityData.pendingTasks.map((t: any) => (
-                      <div key={t.id} className="flex items-center justify-between rounded border border-slate-100 px-2 py-1 text-xs">
-                        <span>{t.title}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${t.status === "in_progress" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{t.status}</span>
-                      </div>
-                    ))}</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Verification/Audit removed from Home (kept for Demo Mode link elsewhere) */}
-
-        <section className={`md:col-span-12 ${cardBase}`}>
-          <div className={cardTitleRow}>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Follow‑ups</h3>
-              <div className="mt-1 text-xs text-slate-500">Auto-drafted notes you can edit and execute.</div>
-            </div>
-            <div className={`${pillBase} ${autoNotes ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>
-              <span>{autoNotes ? "Auto" : "Manual"}</span>
-            </div>
-          </div>
-          <textarea
-            className={`w-full min-h-32 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm outline-none focus:border-slate-300 ${notesIsDraft ? "text-slate-400" : "text-slate-900"}`}
-            placeholder="Paste brief meeting notes (or type key commitments)..."
-            value={notes}
-            onFocus={(e) => {
-              if (notesIsDraft) {
-                try {
-                  (e.target as HTMLTextAreaElement).select();
-                } catch {}
-              }
-            }}
-            onChange={(e) => {
-              lastNotesEditRef.current = Date.now();
-              setAutoNotes(false);
-              if (notesIsDraft) setNotesIsDraft(false);
-              setNotes(e.target.value);
-            }}
-          />
-          <div className="mt-3 flex items-center gap-3">
-            {!autoNotes && (
-              <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50" onClick={() => setAutoNotes(true)}>
-                Resume auto
-              </button>
-            )}
-            <button
-              className={primaryBtn}
-              onClick={extractActions}
-              disabled={!notes.trim() || extracting}
-            >
-              {extracting ? "Extracting..." : "Extract Actions"}
-            </button>
-            {summary && <span className="text-xs text-slate-500">Summary ready</span>}
-          </div>
-
-          {summary && (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm">
-              <div className="mb-1 font-medium">Summary</div>
-              <div className="text-slate-700">{summary}</div>
+              {plannerTasks.slice(0, 5).map((task) => (
+                <div key={task.id} className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm">
+                  <div className="whitespace-pre-line text-slate-700">{task.result}</div>
+                  <div className="mt-1 text-[10px] text-slate-400">{new Date(task.finishedAt || task.startedAt).toLocaleTimeString()}</div>
+                </div>
+              ))}
             </div>
           )}
 
-          {actions.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <div className="font-medium">Actions</div>
-              {actions.map((a, i) => (
-                <div key={i} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
-                  <div>
-                    <div className="font-medium">{a.title}</div>
-                    <div className="text-xs text-slate-500">
-                      {a.type}
-                      {a.owner ? ` • ${a.owner}` : ""}
-                      {a.due ? ` • due ${a.due}` : ""}
+          {/* Auto-executed actions */}
+          {actionQueue.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</div>
+              {actionQueue.slice(0, 10).map((action) => (
+                <div key={action.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                        action.type === "calendar" ? "bg-blue-100 text-blue-700" :
+                        action.type === "email" ? "bg-purple-100 text-purple-700" :
+                        action.type === "task" ? "bg-amber-100 text-amber-700" :
+                        "bg-slate-100 text-slate-600"
+                      }`}>{action.type}</span>
+                      <span className="font-medium text-slate-900">{action.title}</span>
                     </div>
+                    {action.description && <div className="mt-0.5 text-xs text-slate-500">{action.description}</div>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {a.type === "calendar" && (
-                      <a
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-50"
-                        href={calendarDraftUrl(a.title, a.date, a.time)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Calendar Draft
+                  <div className="flex items-center gap-1">
+                    {action.type === "calendar" && action.data?.date && (
+                      <a className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-100" href={calendarDraftUrl(action.title, action.data.date, action.data.time)} target="_blank" rel="noreferrer">
+                        Open
                       </a>
                     )}
-                    {a.type === "task" && (
-                      <button
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-50"
-                        onClick={() => alert("Task added locally for demo")}
-                      >
-                        Add Task
-                      </button>
+                    {!action.userRating && (
+                      <>
+                        <button className="rounded border border-slate-200 px-1 py-0.5 text-xs hover:bg-emerald-50" onClick={() => rateAction(action.id, "up")} title="Correct">👍</button>
+                        <button className="rounded border border-slate-200 px-1 py-0.5 text-xs hover:bg-red-50" onClick={() => rateAction(action.id, "down")} title="Incorrect">👎</button>
+                      </>
+                    )}
+                    {action.userRating && (
+                      <span className={`text-[10px] font-medium ${action.userRating === "up" ? "text-emerald-600" : "text-red-600"}`}>
+                        {action.userRating === "up" ? "✓" : "✗"}
+                      </span>
                     )}
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Auto-drafted notes (compact) */}
+          {notes && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Notes</div>
+              <div className="whitespace-pre-line rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs text-slate-600">{notes.slice(0, 500)}</div>
             </div>
           )}
         </section>
