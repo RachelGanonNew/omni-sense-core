@@ -979,84 +979,68 @@ export default function Home() {
 
       {/* Hero banner */}
       <div className="mx-auto w-full max-w-6xl px-6 pt-6">
-        <div className="rounded-3xl border border-white/20 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 p-6 shadow-2xl">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-                OmniSense — Live Social Translator
-              </h1>
-              <p className="mt-1 text-sm text-fuchsia-50/90">
-                Real-time coaching through mic, camera, and glasses, plus autonomous follow-ups.
-              </p>
+        <div className="rounded-3xl border border-white/20 bg-gradient-to-r from-fuchsia-500 via-purple-600 to-indigo-600 px-6 py-5 shadow-2xl">
+          {/* Top row: title + action buttons */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <button className="rounded-lg bg-white/15 px-2 py-1.5 text-white hover:bg-white/25 md:hidden" onClick={() => setMobileSidebarOpen(true)}>≡</button>
+                <h1 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">OmniSense</h1>
+              </div>
+              <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Live social translator · Gemini 3 Pro</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <div className={`${pillBase} border-white/30 bg-white/15 text-white`}>
-                <span className={`h-2 w-2 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/60"}`} />
-                <span>{consented && !paused ? "AI Assist ON" : "AI Assist OFF"}</span>
-              </div>
-              <div className={`${pillBase} border-white/30 bg-white/10 text-white`}>
-                <span className={`h-2 w-2 rounded-full ${consented ? "bg-emerald-300" : "bg-rose-300"}`} />
-                <span>{consented ? "Camera & Mic Active" : "Camera & Mic Off"}</span>
-              </div>
-              <div className={`${pillBase} border-white/30 bg-white/10 text-white`}>
-                <span className={`h-2 w-2 rounded-full ${
-                  glassesConnected ? "bg-emerald-300" : "bg-white/60"
-                }`} />
-                <span>{glassesConnected ? "Glasses Linked" : "Glasses Ready"}</span>
-              </div>
+            <div className="flex shrink-0 items-center gap-2">
               <button
-                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${
+                className={`relative rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition sm:text-sm ${
                   autonomousMode ? "bg-amber-500 hover:bg-amber-400" : "bg-white/15 hover:bg-white/25"
                 }`}
                 onClick={() => setAutonomousMode((v) => !v)}
               >
-                {autonomousMode ? "Autonomous: ON" : "Autonomous"}
+                {autonomousMode ? "Auto ON" : "Auto"}
+                {autonomousMode && actionQueue.filter((a) => a.status === "proposed").length > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                    {actionQueue.filter((a) => a.status === "proposed").length}
+                  </span>
+                )}
               </button>
-              {autonomousMode && actionQueue.filter((a) => a.status === "proposed").length > 0 && (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {actionQueue.filter((a) => a.status === "proposed").length}
-                </span>
-              )}
               <button
-                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm ${
-                  demoMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white/15 hover:bg-white/25"
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition sm:text-sm ${
+                  demoMode ? "bg-emerald-500 hover:bg-emerald-400" : "bg-white/15 hover:bg-white/25"
                 }`}
-                onClick={() => {
-                  setAppClosed(false);
-                  setDemoMode((v) => !v);
-                }}
+                onClick={() => { setAppClosed(false); setDemoMode((v) => !v); }}
               >
-                {demoMode ? "Demo: ON" : "Demo"}
+                {demoMode ? "Demo ON" : "Demo"}
               </button>
+              {!sidebarOpen && (
+                <button className="hidden rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25 md:block sm:text-sm" onClick={() => setSidebarOpen(true)}>
+                  Settings
+                </button>
+              )}
             </div>
+          </div>
+          {/* Status dots row */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-white/80">
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${consented && !paused ? "bg-emerald-300" : "bg-white/40"}`} />
+              {consented && !paused ? "Listening" : "Mic off"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${consented ? "bg-emerald-300" : "bg-white/40"}`} />
+              {consented ? (cameraFacing === "user" ? "Front cam" : "Back cam") : "Cam off"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${glassesConnected ? "bg-emerald-300" : "bg-white/40"}`} />
+              {glassesConnected ? "Glasses" : "No glasses"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${privacyMode === "cloud" ? "bg-emerald-300" : privacyMode === "local" ? "bg-blue-300" : "bg-amber-300"}`} />
+              {privacyMode === "cloud" ? "Cloud" : privacyMode === "local" ? "Local" : "Privacy off"}
+            </span>
           </div>
         </div>
       </div>
 
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-3">
-          <button className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm shadow-sm hover:bg-slate-50 md:hidden" onClick={() => setMobileSidebarOpen(true)}>
-            ≡
-          </button>
-          <div className={`${pillBase} ${privacyMode === "off" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700"}`}>
-            <span className={`h-2 w-2 rounded-full ${privacyMode === "off" ? "bg-amber-500" : "bg-emerald-500"}`} />
-            <span>{privacyMode === "off" ? "Privacy off" : "Cloud enabled"}</span>
-          </div>
-          <div className={`${pillBase} border-slate-200 bg-white text-slate-700`}>
-            <span className="text-slate-500">Format</span>
-            <span className="font-semibold text-slate-900">{outputMode === "voice" ? "Voice" : "Text"}</span>
-          </div>
-        </div>
-        {!sidebarOpen && (
-          <div className="hidden items-center gap-2 md:flex">
-            <button className={secondaryBtn} onClick={() => setSidebarOpen(true)}>
-              Settings
-            </button>
-          </div>
-        )}
-      </header>
-
-      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pb-12 md:grid-cols-12">
+      <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 pt-6 pb-12 md:grid-cols-12">
         {/* User Journey Status */}
         <div className="md:col-span-12">
           <UserJourneyStatus
