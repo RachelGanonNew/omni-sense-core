@@ -66,6 +66,7 @@ export default function Home() {
   const coachLastRef = useRef<number>(0);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [demoMode, setDemoMode] = useState<boolean>(false);
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [appClosed, setAppClosed] = useState<boolean>(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const suggestionBeforeDemoRef = useRef<string>("");
@@ -919,8 +920,36 @@ export default function Home() {
     }
   };
 
+  // Splash screen: auto-dismiss after 3.5s and auto-start demo mode
+  useEffect(() => {
+    if (!showSplash) return;
+    const t = setTimeout(() => {
+      setShowSplash(false);
+      setDemoMode(true);
+    }, 3500);
+    return () => clearTimeout(t);
+  }, [showSplash]);
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-200 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+
+      {/* Splash Screen */}
+      {showSplash && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-black text-white">
+          <div className="animate-pulse text-center">
+            <div className="mb-3 text-5xl font-bold tracking-tight">OmniSense AI</div>
+            <div className="mb-6 text-lg font-light text-slate-300">Real-time Social Intelligence</div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Powered by Gemini 3 Pro
+            </div>
+          </div>
+          <button className="mt-8 text-xs text-slate-500 hover:text-slate-300 transition-colors" onClick={() => { setShowSplash(false); setDemoMode(true); }}>
+            Skip
+          </button>
+        </div>
+      )}
+
       {appClosed && (
         <div className="mx-auto flex min-h-screen w-full max-w-2xl items-center justify-center px-6 py-10">
           <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1275,7 +1304,13 @@ export default function Home() {
                 <button className="rounded-lg bg-white/15 px-2 py-1.5 text-white hover:bg-white/25 md:hidden" onClick={() => setMobileSidebarOpen(true)}>≡</button>
                 <h1 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">OmniSense</h1>
               </div>
-              <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Real-time social intelligence · Always listening, always ready</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <p className="text-xs text-white/70 sm:text-sm">Real-time social intelligence · Always listening, always ready</p>
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-300/30 bg-blue-400/15 px-2.5 py-0.5 text-[10px] font-semibold text-blue-200 backdrop-blur sm:text-xs">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  Gemini 3 Pro
+                </span>
+              </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
