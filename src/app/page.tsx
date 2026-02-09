@@ -16,7 +16,7 @@ export default function Home() {
   const [speakingMs, setSpeakingMs] = useState(0);
   const [interruption, setInterruption] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string>(
-    "The Leak: Waiting for input — no live context yet.\nThe Fix: Enable mic and camera to start.\nThe Vibe: Relaxed, ready."
+    "The Reality: The Micro-Expression Gap occurs at 0:01; his brow furrows in genuine bewilderment for a fraction of a second before the \"hostage smile\" is applied.\nTactical Script: \"I saw that first reaction—you don't have to perform for me, I know it's a confusing gift.\"\nThe Move: Lean back and laugh to signal that the \"polite lie\" is no longer necessary."
   );
   const [notes, setNotes] = useState("");
   const [notesIsDraft, setNotesIsDraft] = useState(false);
