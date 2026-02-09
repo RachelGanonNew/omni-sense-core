@@ -93,8 +93,6 @@ export default function Home() {
   const bridgeRef = useRef<GlassesBridge | null>(null);
 
   const speakingThreshold = 0.06; // heuristic
-  const spikeFactor = 5.0; // interruption heuristic — raised to reduce false positives
-  const interruptCooldownRef = useRef<number>(0);
 
   const cardBase = "rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur will-change-auto [transform:translateZ(0)]";
   const cardTitleRow = "mb-4 flex items-start justify-between gap-3";
@@ -448,12 +446,6 @@ export default function Home() {
 
     if (!paused && speaking && now2 - levelsFlushRef.current < 50) {
       setSpeakingMs((ms) => ms + 500);
-    }
-
-    if (!prevSpeaking && speaking && prevRms > 0.02 && rms / prevRms > spikeFactor && now2 - interruptCooldownRef.current > 10000) {
-      interruptCooldownRef.current = now2;
-      setInterruption("Possible interruption detected");
-      setTimeout(() => setInterruption(null), 3000);
     }
 
     lastSpeakingRef.current = speaking;
@@ -1294,7 +1286,6 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               {demoMode && <div className={`${pillBase} border-slate-200 bg-slate-50 text-slate-700`}>Demo</div>}
-              {interruption && <div className={`${pillBase} border-amber-200 bg-amber-50 text-amber-800`}>Interruption</div>}
             </div>
           </div>
           {demoMode && (
