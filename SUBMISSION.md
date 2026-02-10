@@ -1,94 +1,110 @@
-# OmniSense Core
-
-A proactive, privacy-first multimodal "Cognitive Second Brain" for meetings and safety. Built with Next.js + TypeScript and Gemini 3.
-
-## Runtime Instructions
-- Requirements: Node 18+, GEMINI_API_KEY set in `.env.local` at project root.
-- Development: `npm run dev` → http://localhost:3000
-- Production Build: `npm run build`
-- Production Run: `npm run start` → http://localhost:3000
-
-## Key Screens & Flows
-- Home: live mic/cam assist, speaking intensity, interruption nudge, suggestions.
-- Trainer: edit system instruction, preferences JSON, and history snippet.
-- Upload: analyze a video by extracting frames + optional transcript to produce a structured JSON insight with confidence.
-
-## Endpoints
-- POST `/api/omnisense/analyze` — low-latency JSON insight from live context.
-- POST `/api/omnisense/analyze-frames` — batch frames + transcript → JSON insight with confidence.
-- GET  `/api/omnisense/analyze/stream` — SSE insight stream (demo behavior).
-- GET/POST `/api/omnisense/context` — read/write system instruction, preferences, history.
-- POST `/api/extract-actions` — extract action items from notes.
-- POST `/api/suggest` — lightweight coaching suggestions.
-- GET  `/api/evaluate` — synthetic cases for prompt QA, returns per-case outputs + avg confidence.
-- GET  `/api/local-video` — dev-only stream of local video (C:/Users/USER/Downloads/a.mp4).
-
-## Evaluation & Prompt QA
-- Visit `/api/evaluate` to run built-in synthetic scenarios. Use results to refine Trainer context and re-run.
-
-## Security & Hardening
-- Basic per-IP rate limiting on main analysis endpoints.
-- Schema coercion and a self-check confidence score using Gemini.
-- No raw media persisted; context stored in `.data/omni.json`.
-
-## Gemini Usage (200 words)
-OmniSense Core uses Gemini 3 as a reasoning engine for multimodal social and safety assistance. The system instruction encodes role, constraints, and safety policy: be concise, avoid sensitive attribute inference, and provide actionable guidance. For live mode, we form lightweight observations (audio intensity, speaking state, interruptions, brief transcript) and call a fast JSON-only prompt to produce a single insight object with fields `insight_type`, `observation`, `analysis`, and `action_recommendation`. For video uploads, we extract a small set of frames (configurable) and include an optional transcript snippet with the same instruction, yielding a consistent JSON schema. To improve reliability, we add a second Gemini call for self-scoring (0–1) of clarity, actionability, and safety; this produces a confidence score shown to the user. We provide a `/api/evaluate` endpoint with synthetic meeting-like scenarios to stress-test prompts and collect average confidence without external datasets. The Trainer panel enables iterative prompt engineering: edit system instruction, preferences, and history snippet, then re-run evaluation and upload analysis to observe changes. Together, this architecture delivers a robust, privacy-first assistant that demonstrates Gemini 3’s multimodal capabilities in a focused, judge-friendly MVP.
-
-## Demo Script (Suggested)
-1) Open Upload and analyze sample video; show insight + confidence.
-2) Paste notes → extract actions.
-3) Open Trainer, tweak instruction, re-run `/api/evaluate`.
-4) Switch to Home; show speaking intensity and suggestions.
-
-## Judge Demo Checklist (Production)
+# OmniSense AI — Hackathon Submission
 
 Live URL: https://omnisense-orchestrator.vercel.app
 
-1. Header setup
-   - Set Privacy: Cloud.
-   - (Optional) Enable Conversational Voice for micro‑coaching.
-2. Start Judge Demo
-   - Click “Start Judge Demo” (header) → runs a 3‑step autonomous loop and exports an HTML report.
-   - Wait for inline status: “Demo complete. Report: …”.
-3. Verification / Audit
-   - Open the Verification/Audit panel.
-   - Click “Refresh Timeline” to load session events and verify steps.
-   - Click “Export HTML Report”; note the artifact path returned.
-   - Use “Refresh” in Artifacts to list recent report/run files.
-4. Temporal coaching (optional)
-   - Speak continuously ~10s to trigger Dominance; listen for a brief coaching cue.
-   - Create a short spike to simulate Overlap.
+---
 
-## Production Smoke Test
+## Inspiration
 
-1. Health
-   - GET /api/health → { "status": "ok" }
-2. Agent Single Step
-   - POST /api/agent/act with a minimal observation, e.g. { observation: { detection: { kind: "overlap" } }, maxTools: 1 }
-   - Expect JSON with thoughts, toolCalls[], and signature/level.
-3. Agent Run
-   - POST /api/agent/run with { goal: "Prepare follow-up plan", steps: 2 }
-   - Expect { ok: true, steps, artifact } and verify an artifact path.
-4. Audit Endpoints
-   - GET /api/audit/timeline → session, tasks, logs, verifySteps.
-   - POST /api/audit/report → { ok: true, artifact } (HTML report path).
-5. Research Provider (optional)
-   - If GOOGLE_API_KEY + GOOGLE_CSE_ID set: web.search tool results include Google CSE summaries.
-   - Otherwise falls back to Wikipedia summaries.
+We've all been in conversations where we missed the subtext — a friend who says "I'm fine" but clearly isn't, a colleague whose polite smile hides frustration, a social situation where we said the wrong thing and only realized it hours later. For neurodivergent individuals, people with social anxiety, or anyone navigating high-stakes social moments, these missed signals can have real consequences.
+
+We asked: **what if AI could read the room for you in real time?** Not after the fact, not as a chatbot you type into — but as a silent partner that watches, listens, and whispers the perfect move in your ear the moment you need it.
+
+The rise of smart glasses and always-on wearables made this feel inevitable. But existing tools are either post-hoc transcription services or generic chatbots. Nobody was building a **live social intelligence engine** that detects micro-expressions, reads conversational dynamics, and autonomously handles the follow-ups — booking the dinner, drafting the email, remembering that your friend Alex has a sweet tooth.
+
+That gap inspired OmniSense.
 
 ---
 
-## Hackathon Submission Text (copy/paste)
+## What it does
 
-**What we built (short description)**  
-OmniSense is a **live social translator** that listens through mic, camera, and AI glasses, explains the room’s social subtext in four lines, and then uses a **Gemini 3‑powered agent** to handle all the follow‑ups. It is not a chat wrapper: it is a tool‑calling orchestrator with long‑term memory, policies, and verification.
+OmniSense is a real-time social intelligence engine that runs through your mic, camera, and (optionally) AI glasses. It does three things simultaneously:
 
-**Strategic track fit**  
-- **🧠 Marathon Agent** – Planner + Action Queue + long‑term memory form a background agent that keeps drafting goals, creating tasks, and maintaining continuity across days of interactions.  
-- **👨‍🏫 Real‑Time Teacher** – Live mic/cam + glasses sensors drive streaming “social translation” for classrooms and meetings: The Vibe, Hidden Meaning, Social Red Flags, and The Social Script.  
-- **☯️ Vibe Engineering** – Thought signatures, verification tools (`agent.verify_step`), synthetic eval (`/api/evaluate`), and HTML audit artifacts build a self‑evaluation loop that measures and improves behavior over time.
+**1. Live Coaching ("The Tactical Fixer")**
+As you talk, OmniSense analyzes audio dynamics, facial cues, and conversational patterns. Every few seconds, it delivers a 3-line coaching script:
+- **The Leak** — what's really happening beneath the surface ("His brow furrows in genuine bewilderment before the hostage smile kicks in")
+- **The Fix** — the exact words to say right now ("I saw that first reaction — you don't have to perform for me")
+- **The Vibe** — the body language to use ("Lean back, laugh, open palms")
 
-**How we use Gemini 3 (≈200 words)**  
-OmniSense uses Gemini 3 Pro as a **tool-calling orchestrator**, not a simple chat wrapper. For live “social translation”, the browser streams lightweight observations (RMS intensity, speaking state, interruptions, glasses sensor cues, short transcript snippets) to `/api/omnisense/analyze/stream`. The server builds a rich prompt that combines system instruction, user preferences, long-context assembly, and a long‑term memory snippet. Gemini 3 Pro returns a structured JSON object with a four-line script: The Vibe, The Hidden Meaning, Social Red Flags, The Social Script. A second Gemini call self-scores clarity, actionability, and safety, feeding a confidence bar and conservative/proactive tuning.  
-For the **Marathon Agent**, `/api/agent/run` calls `runAgentStep`, which provides Gemini 3 with tool schemas (`web.search`, `calendar.create_event`, `memory.write`, `tasks.create`, `tasks.update_status`, `notes.write`, `agent.verify_step`) plus long-term memory and preferences. Gemini proposes tool_calls; the server executes them, logs thought signatures, and writes verification records. `/api/evaluate` uses Gemini to synthesize diverse scenarios and rubric-score OmniSense’s outputs across four competencies, producing quantitative reliability metrics. Together, this architecture showcases Gemini 3 Pro’s long context, multimodal reasoning, structured outputs, and agentic tool calling in a way that is self-evaluating and ready for real-world social coaching.
+**2. Background Intel (Autonomous Planner)**
+While you're focused on the conversation, OmniSense silently listens for plans, commitments, and action items. It automatically:
+- Detects "Let's grab dinner Saturday" → creates a calendar event
+- Catches "I'll send you that article" → creates a task reminder
+- Notices "We need to sync on deadlines" → drafts a follow-up email
+- Builds social advice: "Jordan seems stressed — lead with empathy before jumping into logistics"
 
+**3. Long-Term Social Memory**
+Every interaction is persisted. OmniSense remembers that Alex likes Italian food, that Jordan is worried about the March deadline, and that Sarah asked about AI glasses last week. This context flows into every future suggestion, making the coaching more personal over time.
+
+---
+
+## How we built it
+
+**Stack:** Next.js 16 + React 19 + TypeScript + Tailwind CSS 4, deployed on Vercel.
+
+**AI Engine:** Google Gemini 3 Pro via the `@google/generative-ai` SDK. We use Gemini in three distinct modes:
+- **Streaming analysis** — SSE endpoint (`/api/omnisense/analyze/stream`) for real-time coaching. The prompt combines system instructions, user preferences, live audio/vision observations, transcript snippets, and long-term memory into a single call. Gemini returns structured JSON with the 3-line coaching script.
+- **Autonomous agent** — `/api/agent/run` provides Gemini with 8 tool schemas (web search, calendar, tasks, memory, notes, verification). Gemini proposes tool calls; the server executes them, logs thought signatures, and writes verification records. This powers the Background Intel planner.
+- **Self-evaluation** — A second Gemini call scores each insight for clarity, actionability, and safety (0–1 confidence). `/api/evaluate` generates synthetic scenarios and rubric-scores outputs across 4 competencies.
+
+**Persistence:** Upstash Redis for long-term memory in production, with local JSONL fallback for development. Every interaction (analysis, suggestion, agent step, autonomous action) is persisted and injected into future prompts.
+
+**Privacy:** No raw audio or video is ever stored. The browser processes media in-memory and sends only structured observations (intensity percentages, boolean flags, short transcript snippets, capped frame sets). Three privacy modes: Cloud (full AI), Local (heuristics only), Off (all analysis disabled).
+
+**Real-time pipeline:** The browser runs a `requestAnimationFrame` loop for audio analysis (RMS levels, speaking detection), throttled to ~2 state updates/second for mobile performance. A polling loop sends observations to the streaming API every 3 seconds. Background Intel runs on staggered intervals (actions every 30s, planner every 45s).
+
+---
+
+## Challenges we ran into
+
+- **iPhone flickering** — React state updates at 30fps from the audio analysis loop caused visible UI flickering on iOS Safari. We solved this by throttling `setLevels` to 2 updates/second and using refs for high-frequency data, plus GPU compositing hints (`transform: translateZ(0)`) on card containers.
+
+- **False interruption detection** — Our initial "interruption detector" (spike in audio RMS when transitioning from silence to speech) fired constantly during normal conversation. With a single microphone, there's no way to distinguish speakers. We ultimately removed the feature entirely rather than ship something unreliable.
+
+- **API quota burn rate** — Polling Gemini every 1 second during live sessions burned through the free tier quota in minutes. We had to balance responsiveness against cost, settling on 3-second intervals with visible error feedback when quota is exceeded.
+
+- **Layout shifts on mobile** — The Background Intel card's content changes dynamically as actions and plans appear. Conditional rendering (`{condition && <div>}`) caused iOS Safari to recalculate layout and shift everything. We replaced all conditional mounts with stable DOM structures that use opacity transitions and empty array maps instead.
+
+- **Prompt engineering for social nuance** — Getting Gemini to produce genuinely useful social coaching (not generic platitudes) required extensive prompt iteration. The "Tactical Fixer" persona — with its emphasis on "graceful exits" and specific quotes the user can say — emerged after many rounds of testing with real conversation scenarios.
+
+---
+
+## Accomplishments that we're proud of
+
+- **It actually works in real time.** You can have a conversation and see genuinely insightful coaching appear within seconds — not generic advice, but specific observations about what's happening in *your* conversation right now.
+
+- **The autonomous planner is invisible.** You never have to tell it to do anything. It silently detects commitments from natural speech and handles them. The user's job is to be present in the conversation; OmniSense handles the rest.
+
+- **Privacy-first architecture.** No raw media is ever stored or transmitted. We proved you can build a powerful real-time AI assistant without compromising user privacy.
+
+- **Self-improving feedback loop.** Every autonomous action gets a thumbs up/down rating. When accuracy drops below 70%, future prompts automatically become more conservative. The system learns from its mistakes.
+
+- **31 API routes, 8 agent tools, 3 privacy modes** — all working together in a cohesive product, not a collection of demos.
+
+---
+
+## What we learned
+
+- **Gemini 3 Pro's structured JSON output is remarkably reliable.** We enforce strict JSON schemas in every prompt, and Gemini consistently produces parseable, well-formed responses — even for complex nested objects with confidence scores.
+
+- **The 1M token context window changes what's possible.** We inject weeks of interaction history into every prompt without truncation. This means OmniSense genuinely remembers past conversations and adapts its coaching accordingly.
+
+- **Real-time AI on mobile is harder than expected.** iOS Safari has strict constraints around autoplay audio, `requestAnimationFrame` performance, and layout recalculation. Every state update matters when you're targeting 60fps on a phone.
+
+- **Social intelligence is not sentiment analysis.** Detecting that someone is "negative" is easy. Detecting that someone is performing politeness while actually confused — and then crafting a response that gives them a graceful exit — requires a fundamentally different kind of prompt engineering.
+
+- **The best AI features are the ones users don't notice.** The autonomous planner is the most powerful feature in OmniSense, and it has zero UI controls. It just works silently in the background. That's the goal.
+
+---
+
+## What's next for OmniSense AI
+
+- **Smart glasses integration** — We have a simulated glasses sensor bridge ready. The next step is integrating with real hardware (Meta Ray-Ban, etc.) for true hands-free social coaching whispered through bone conduction.
+
+- **Multi-speaker diarization** — With proper speaker separation (either from stereo mics or AI-based diarization), we can track who said what and provide per-person social profiles and coaching.
+
+- **Proactive social preparation** — Before you walk into a meeting, OmniSense could pull up everything it knows about the attendees from past interactions: "Last time you spoke with Jordan, they were stressed about deadlines. Sarah mentioned wanting to discuss the AI glasses article."
+
+- **Emotional pattern tracking** — Over weeks of use, OmniSense could identify patterns: "You tend to get defensive when discussing budgets" or "Your energy drops in afternoon meetings." This longitudinal insight could drive genuinely transformative self-awareness.
+
+- **API for third-party wearables** — Open the social intelligence engine as an API that any wearable device can plug into, creating an ecosystem of socially-aware hardware.

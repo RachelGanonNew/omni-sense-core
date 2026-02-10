@@ -66,6 +66,7 @@ export default function Home() {
   const coachLastRef = useRef<number>(0);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [demoMode, setDemoMode] = useState<boolean>(false);
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [appClosed, setAppClosed] = useState<boolean>(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const suggestionBeforeDemoRef = useRef<string>("");
@@ -341,12 +342,12 @@ export default function Home() {
       } catch {}
     };
 
-    // Stagger: actions at 15s, planner at 45s, then repeat
-    const ivActions = window.setInterval(autoRun, 30000);
-    const ivPlanner = window.setInterval(autoPlanner, 45000);
+    // Stagger: actions at 90s, planner at 120s to stay within Gemini 3 Pro rate limits (~5 RPM)
+    const ivActions = window.setInterval(autoRun, 90000);
+    const ivPlanner = window.setInterval(autoPlanner, 120000);
     // Initial runs with delay
-    const t1 = setTimeout(autoRun, 5000);
-    const t2 = setTimeout(autoPlanner, 15000);
+    const t1 = setTimeout(autoRun, 20000);
+    const t2 = setTimeout(autoPlanner, 40000);
     return () => {
       cancelled = true;
       window.clearInterval(ivActions);
@@ -365,7 +366,7 @@ export default function Home() {
     return () => window.clearInterval(iv);
   }, [runStartedAt]);
 
-  // Demo Mode: scripted showcase without requiring camera/mic
+  // Demo Mode: scripted showcase without requiring camera/mic — progressive reveal for judges
   useEffect(() => {
     if (demoMode) {
       suggestionBeforeDemoRef.current = suggestion;
@@ -376,38 +377,91 @@ export default function Home() {
 
       const demoTips = [
         "The Leak: They're teasing, not literally criticizing — words and tone don't match.\nThe Fix: Laugh it off and say: 'Haha fair — what would you do instead?'\nThe Vibe: Playful grin, lean back.",
+        "The Leak: His brow furrows in genuine bewilderment before the \"hostage smile\" kicks in — he doesn't understand the gift.\nThe Fix: Say: 'I saw that first reaction — you don't have to perform for me, I know it's a confusing gift.'\nThe Vibe: Lean back, laugh, open palms.",
         "The Leak: Short replies and impatient tone — they want this wrapped up fast.\nThe Fix: Say: 'Got it — what's the one thing you need from me right now?'\nThe Vibe: Direct eye contact, calm nod.",
         "The Leak: Overly polite wording is masking condescension — they're testing your boundaries.\nThe Fix: Say: 'I appreciate that — let's cut to what you actually need.'\nThe Vibe: Steady posture, slight smile.",
+        "The Leak: Nervous laughter + fidgeting — they're uncomfortable but don't want to say it.\nThe Fix: Say: 'Hey, no pressure at all — we can totally skip this if it's not your thing.'\nThe Vibe: Soft voice, step back slightly.",
       ];
 
       const now = Date.now();
-      setDetections([
-        { t: now, kind: "Sarcasm likely", info: "Words and tone don't match" },
-        { t: now - 7000, kind: "Pressure", info: "Short replies, impatient tone" },
-        { t: now - 14000, kind: "Condescending", info: "Overly polite wording" },
-      ]);
 
-      // Populate Background Intel with demo data
-      setActionQueue([
-        { id: "demo-1", type: "calendar", title: "Dinner with Alex — Saturday 7pm", description: "Detected from conversation: 'Let's grab dinner Saturday evening'", confidence: 0.92, status: "executed", executedAt: now, data: { date: "2026-02-14", time: "19:00" } },
-        { id: "demo-2", type: "task", title: "Send Sarah the article about AI glasses", description: "Commitment detected: 'I'll send you that link later'", confidence: 0.85, status: "executed", executedAt: now - 5000 },
-        { id: "demo-3", type: "email", title: "Follow up with Jordan re: project timeline", description: "Action item from earlier: 'We need to sync on deadlines'", confidence: 0.78, status: "executed", executedAt: now - 12000, data: { to: "jordan@example.com", subject: "Project timeline sync", body: "Hey Jordan — following up on our chat. Want to lock in deadlines this week. When works for you?" } },
-        { id: "demo-4", type: "task", title: "Book flights for March trip", description: "Mentioned twice in conversation — flagged as high priority", confidence: 0.88, status: "executed", executedAt: now - 20000 },
-      ]);
-      setPlannerTasks([
-        { id: "demo-plan-1", goal: "Auto-detected from conversation", status: "done" as const, result: "Plan detected: Saturday dinner with Alex at 7pm.\nSuggestion: Book a table at the Italian place you both liked last time. Mention the new dessert menu — Alex has a sweet tooth.", startedAt: now - 30000, finishedAt: now - 25000 },
-        { id: "demo-plan-2", goal: "Auto-detected from conversation", status: "done" as const, result: "Upcoming: Jordan seems stressed about the project deadline.\nAdvice: Lead with empathy — ask how they're doing before jumping into logistics. Offer to take one task off their plate.", startedAt: now - 60000, finishedAt: now - 55000 },
-      ]);
-      setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.\nSarah asked about AI glasses article from last week.");
+      // Start with just the first suggestion and notes — then progressively add intel
+      setSuggestion(demoTips[0]);
+      setDetections([{ t: now, kind: "Sarcasm likely", info: "Words and tone don't match" }]);
+      setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.");
+      setActionQueue([]);
+      setPlannerTasks([]);
 
-      let i = 0;
-      setSuggestion(demoTips[i]);
+      const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+      // 3s: first action appears
+      timeouts.push(setTimeout(() => {
+        setActionQueue([
+          { id: "demo-1", type: "calendar", title: "Dinner with Alex — Saturday 7pm", description: "Detected from conversation: 'Let's grab dinner Saturday evening'", confidence: 0.92, status: "executed", executedAt: Date.now(), data: { date: "2026-02-14", time: "19:00" } },
+        ]);
+      }, 3000));
+
+      // 6s: second tip + detection + more notes
+      timeouts.push(setTimeout(() => {
+        setSuggestion(demoTips[1]);
+        setDetections((d) => [{ t: Date.now(), kind: "Micro-expression gap", info: "Bewilderment before forced smile" }, ...d]);
+        setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.");
+      }, 6000));
+
+      // 10s: planner result + second action
+      timeouts.push(setTimeout(() => {
+        setPlannerTasks([
+          { id: "demo-plan-1", goal: "Auto-detected from conversation", status: "done" as const, result: "Plan detected: Saturday dinner with Alex at 7pm.\nSuggestion: Book a table at the Italian place you both liked last time. Mention the new dessert menu — Alex has a sweet tooth.", startedAt: Date.now() - 5000, finishedAt: Date.now() },
+        ]);
+        setActionQueue((prev) => [
+          { id: "demo-2", type: "task", title: "Send Sarah the article about AI glasses", description: "Commitment detected: 'I'll send you that link later'", confidence: 0.85, status: "executed", executedAt: Date.now() },
+          ...prev,
+        ]);
+      }, 10000));
+
+      // 14s: third tip + detection
+      timeouts.push(setTimeout(() => {
+        setSuggestion(demoTips[2]);
+        setDetections((d) => [{ t: Date.now(), kind: "Pressure", info: "Short replies, impatient tone" }, ...d]);
+      }, 14000));
+
+      // 18s: email action + second planner insight
+      timeouts.push(setTimeout(() => {
+        setActionQueue((prev) => [
+          { id: "demo-3", type: "email", title: "Follow up with Jordan re: project timeline", description: "Action item: 'We need to sync on deadlines'", confidence: 0.78, status: "executed", executedAt: Date.now(), data: { to: "jordan@example.com", subject: "Project timeline sync", body: "Hey Jordan — following up on our chat. Want to lock in deadlines this week. When works for you?" } },
+          ...prev,
+        ]);
+        setPlannerTasks((prev) => [
+          { id: "demo-plan-2", goal: "Auto-detected from conversation", status: "done" as const, result: "Upcoming: Jordan seems stressed about the project deadline.\nAdvice: Lead with empathy — ask how they're doing before jumping into logistics. Offer to take one task off their plate.", startedAt: Date.now() - 5000, finishedAt: Date.now() },
+          ...prev,
+        ]);
+        setNotes("Alex mentioned wanting to try the new Italian place on 5th Ave.\nJordan is worried about the March deadline — might need help with the design review.\nSarah asked about AI glasses article from last week.\nMentioned booking flights for March trip twice — flagged as high priority.");
+      }, 18000));
+
+      // 22s: fourth tip + task action
+      timeouts.push(setTimeout(() => {
+        setSuggestion(demoTips[3]);
+        setDetections((d) => [{ t: Date.now(), kind: "Condescending tone", info: "Overly polite wording masking intent" }, ...d]);
+        setActionQueue((prev) => [
+          { id: "demo-4", type: "task", title: "Book flights for March trip", description: "Mentioned twice in conversation — flagged as high priority", confidence: 0.88, status: "executed", executedAt: Date.now() },
+          ...prev,
+        ]);
+      }, 22000));
+
+      // 28s+: cycle remaining tips
+      let tipIdx = 4;
       if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
       demoIntervalRef.current = window.setInterval(() => {
-        i = (i + 1) % demoTips.length;
-        setSuggestion(demoTips[i]);
-      }, 6000);
-      return;
+        setSuggestion(demoTips[tipIdx % demoTips.length]);
+        tipIdx++;
+      }, 8000);
+      // Start the cycling after the scripted sequence
+      const cycleStart = setTimeout(() => {}, 28000);
+      timeouts.push(cycleStart);
+
+      return () => {
+        timeouts.forEach(clearTimeout);
+      };
     }
 
     if (demoIntervalRef.current) window.clearInterval(demoIntervalRef.current);
@@ -453,17 +507,23 @@ export default function Home() {
     rafRef.current = requestAnimationFrame(tick);
   }, [paused]);
 
-  // Poll or stream backend for concise suggestion (~1/sec)
+  // Poll backend for live suggestions with adaptive backoff
+  const pollDelayRef = useRef(15000);
   useEffect(() => {
     if (!consented || paused || demoMode) return;
     let cancelled = false;
-    const iv = setInterval(async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const BASE_DELAY = 15000;
+    const MAX_DELAY = 60000;
+
+    const poll = async () => {
       try {
+        const curLevels = levelsRef.current;
         const payload = {
           audioDynamics: {
-            intensityPct: Math.min(100, Math.round(levels.rms * 400)),
-            speaking: levels.speaking,
-            interruption: !!interruption,
+            intensityPct: Math.min(100, Math.round(curLevels.rms * 400)),
+            speaking: curLevels.speaking,
+            interruption: false,
           },
           visionHints: { scene: "meeting", sensors: sensorRef.current ? { ...sensorRef.current, engagement } : undefined },
           transcript: notes.slice(0, 220),
@@ -471,7 +531,7 @@ export default function Home() {
 
         // --- Temporal detectors (windowed over ~20s) ---
         const nowTs = Date.now();
-        detectBufRef.current.push({ t: nowTs, speaking: levels.speaking, intensity: levels.rms, engagement });
+        detectBufRef.current.push({ t: nowTs, speaking: curLevels.speaking, intensity: curLevels.rms, engagement });
         // keep last 20 seconds
         detectBufRef.current = detectBufRef.current.filter((p) => nowTs - p.t <= 20000);
         const last10 = detectBufRef.current.filter((p) => nowTs - p.t <= 10000);
@@ -489,16 +549,8 @@ export default function Home() {
           try {
             await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, at: nowTs, details: { info } }) });
           } catch {}
-          // Trigger autonomous agent step with concise observation
-          try {
-            const observation = {
-              detection: { kind, info, at: nowTs },
-              audio: { speaking: levels.speaking, rms: Number(levels.rms.toFixed(3)) },
-              sensors: sensorRef.current ? { ...sensorRef.current, engagement } : { engagement },
-              transcript: notes.slice(0, 160),
-            };
-            await fetch("/api/agent/act", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ observation, maxTools: 2 }) });
-          } catch {}
+          // Skip per-detection agent calls to conserve Gemini 3 Pro rate limits
+          // Background planner handles these observations on its own interval
 
           // Real-time coaching (cooldown 12s) only when allowed
           try {
@@ -535,63 +587,82 @@ export default function Home() {
           await emit("engagement_drop", `Low engagement ${disengaged}/8s`);
         }
 
-        // Stream mode is always ON in this build
-        if (true) {
-          const res = await fetch("/api/omnisense/analyze/stream", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          if (!res.ok || !res.body) {
+        const res = await fetch("/api/omnisense/analyze/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok || !res.body) {
+          // Back off on rate limit errors
+          if (res.status === 429) {
+            pollDelayRef.current = Math.min(MAX_DELAY, pollDelayRef.current * 2);
+            if (!cancelled) setSuggestion(`Rate limited. Backing off ${Math.round(pollDelayRef.current / 1000)}s...`);
+          } else {
             if (!cancelled) setSuggestion(`API error (${res.status}). Retrying...`);
-            return;
           }
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const chunks = buf.split("\n\n");
-            for (const chunk of chunks) {
-              if (chunk.includes("event: error") && chunk.includes("data:")) {
-                const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-                if (line && !cancelled) {
+          if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const chunks = buf.split("\n\n");
+          for (const chunk of chunks) {
+            if (chunk.includes("event: error") && chunk.includes("data:")) {
+              const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+              if (line && !cancelled) {
+                const errText = line.slice(5).trim();
+                if (errText.includes("429") || errText.includes("Too Many")) {
+                  pollDelayRef.current = Math.min(MAX_DELAY, pollDelayRef.current * 2);
+                  setSuggestion(`Rate limited. Backing off ${Math.round(pollDelayRef.current / 1000)}s...`);
+                } else {
                   try {
-                    const errObj = JSON.parse(line.slice(5).trim());
+                    const errObj = JSON.parse(errText);
                     setSuggestion(`Model error: ${errObj.error?.slice(0, 200) || "unknown"}. Retrying...`);
                   } catch {
                     setSuggestion("Model error. Retrying...");
                   }
                 }
-                return;
               }
-              if (chunk.includes("event: insight") && chunk.includes("data:")) {
-                const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-                if (line) {
-                  const json = line.slice(5).trim();
-                  try {
-                    const obj = JSON.parse(json);
-                    const tip = obj?.action_recommendation || obj?.analysis || obj?.observation;
-                    if (!cancelled && tip) setSuggestion(String(tip).slice(0, 700));
-                    await reader.cancel();
-                    return;
-                  } catch {}
-                }
+              if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
+              return;
+            }
+            if (chunk.includes("event: insight") && chunk.includes("data:")) {
+              const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+              if (line) {
+                const json = line.slice(5).trim();
+                try {
+                  const obj = JSON.parse(json);
+                  const tip = obj?.action_recommendation || obj?.analysis || obj?.observation;
+                  if (!cancelled && tip) setSuggestion(String(tip).slice(0, 700));
+                  // Success — reset backoff to base
+                  pollDelayRef.current = BASE_DELAY;
+                  await reader.cancel();
+                  if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
+                  return;
+                } catch {}
               }
             }
           }
         }
+        // Stream ended without insight — schedule next poll
+        if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
       } catch (err: any) {
         if (!cancelled) setSuggestion(`Connection error. Retrying...`);
+        if (!cancelled) timer = setTimeout(poll, pollDelayRef.current);
       }
-    }, 3000);
+    };
+
+    timer = setTimeout(poll, 1000);
     return () => {
       cancelled = true;
-      clearInterval(iv);
+      clearTimeout(timer);
     };
-  }, [consented, paused, demoMode, levels.rms, levels.speaking, interruption, notes, outputMode]);
+  }, [consented, paused, demoMode, notes, outputMode]);
 
   // Load current backend context on component mount
   useEffect(() => {
@@ -849,8 +920,36 @@ export default function Home() {
     }
   };
 
+  // Splash screen: auto-dismiss after 3.5s and auto-start demo mode
+  useEffect(() => {
+    if (!showSplash) return;
+    const t = setTimeout(() => {
+      setShowSplash(false);
+      setDemoMode(true);
+    }, 3500);
+    return () => clearTimeout(t);
+  }, [showSplash]);
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-200 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+
+      {/* Splash Screen */}
+      {showSplash && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-black text-white">
+          <div className="animate-pulse text-center">
+            <div className="mb-3 text-5xl font-bold tracking-tight">OmniSense AI</div>
+            <div className="mb-6 text-lg font-light text-slate-300">Real-time Social Intelligence</div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Powered by Gemini 3 Pro
+            </div>
+          </div>
+          <button className="mt-8 text-xs text-slate-500 hover:text-slate-300 transition-colors" onClick={() => { setShowSplash(false); setDemoMode(true); }}>
+            Skip
+          </button>
+        </div>
+      )}
+
       {appClosed && (
         <div className="mx-auto flex min-h-screen w-full max-w-2xl items-center justify-center px-6 py-10">
           <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1205,7 +1304,13 @@ export default function Home() {
                 <button className="rounded-lg bg-white/15 px-2 py-1.5 text-white hover:bg-white/25 md:hidden" onClick={() => setMobileSidebarOpen(true)}>≡</button>
                 <h1 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">OmniSense</h1>
               </div>
-              <p className="mt-0.5 text-xs text-white/70 sm:text-sm">Real-time social intelligence · Always listening, always ready</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <p className="text-xs text-white/70 sm:text-sm">Real-time social intelligence · Always listening, always ready</p>
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-300/30 bg-blue-400/15 px-2.5 py-0.5 text-[10px] font-semibold text-blue-200 backdrop-blur sm:text-xs">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  Gemini 3 Pro
+                </span>
+              </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
